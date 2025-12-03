@@ -60,7 +60,12 @@ public class Trie {
         valueBounds1.add(0);
         valueBounds1.add(cardinality);
 
-        tupleIdx = Arrays.copyOfRange(bt.tupleOrder, domain.getFirst(), domain.getSecond());
+        final int[] tupleOrder = bt.tupleOrder;
+        tupleIdx = Arrays.copyOfRange(tupleOrder, domain.getFirst(), domain.getSecond());
+        // tupleIdx = new int[cardinality];
+        // for (int i = 0; i < cardinality; i++) {
+        //     tupleIdx[i] = tupleOrder[domain.getFirst() + i];
+        // }
     }
 
     int[] boundsOfArray(int arrayIdx) {
@@ -94,9 +99,7 @@ public class Trie {
         // System.out.println("Trie " + aliasID + " last level with " + (curLevelValueBounds.size / 2) + " value blocks.");
         curLevel--;
     }
-
-
-
+    // 进入下一层（初始化值）。根据是否在缓存（OrderCache）中有排序结果，选择调用processWithSort或processWithoutSort。
     public void nextLevel() {
         curLevel++;
         if (curLevel == maxLevel)
@@ -121,6 +124,81 @@ public class Trie {
 
     }
 
+    private void processWithoutSort() {
+
+        int[] boundsData = preLevelValueBounds.data;
+        final int[] values = curValues;
+        final int[] indices = tupleIdx;
+
+        // 根结点处理
+        if (curLevel == 0) {
+            final int arrayLB = boundsData[0];
+            final int arrayUB = boundsData[1];
+
+            curLevelArrayBounds.add(curLevelValues.size);
+
+            int currentStart = arrayLB;
+            int currentValue = values[indices[currentStart]];
+            for (int j = arrayLB + 1; j < arrayUB; j++) {
+                int value = values[indices[j]];
+                if (value != currentValue) {
+                    curLevelValues.add(currentValue);
+                    curLevelValueBounds.add(currentStart);
+                    curLevelValueBounds.add(j);
+                    currentStart = j;
+                    currentValue = value;
+                }
+            }
+            curLevelValues.add(currentValue);
+            curLevelValueBounds.add(currentStart);
+            curLevelValueBounds.add(arrayUB);
+
+            curLevelArrayBounds.add(curLevelValues.size);
+
+            curLevelValueParentIdx.rangeSetValue(0, curLevelValues.size, 0);
+        } else {
+            IntArray preLevelValueStatus = curLevelValueStatus;
+            int[] statusData = preLevelValueStatus.data;
+            int size = preLevelValueStatus.size;
+            BitSet status = rt.status; // 获取当前层的状态位图
+
+            int fatherIdx = 0;
+            for (int i = 0; i < size; i++) {
+                if (statusData[i] != 1)
+                    continue;
+
+                curLevelArrayBounds.add(curLevelValues.size);
+
+                if(status.get(fatherIdx)) {
+                    final int baseIdx = i << 1; // Use bit shift
+                    final int arrayLB = boundsData[baseIdx];
+                    final int arrayUB = boundsData[baseIdx + 1];
+
+                    int currentStart = arrayLB;
+                    int currentValue = values[indices[currentStart]];
+                    for (int j = arrayLB + 1; j < arrayUB; j++) {
+                        int value = values[indices[j]];
+                        if (value != currentValue) {
+                            curLevelValues.add(currentValue);
+                            curLevelValueParentIdx.add(fatherIdx);
+                            curLevelValueBounds.add(currentStart);
+                            curLevelValueBounds.add(j);
+                            currentStart = j;
+                            currentValue = value;
+                        }
+                    }
+                    curLevelValues.add(currentValue);
+                    curLevelValueParentIdx.add(fatherIdx);
+                    curLevelValueBounds.add(currentStart);
+                    curLevelValueBounds.add(arrayUB);
+                }
+
+                curLevelArrayBounds.add(curLevelValues.size);
+
+                fatherIdx++;
+            }
+        }
+    }
 
     private void processWithSort() {
 
@@ -158,6 +236,50 @@ public class Trie {
     private void processBoundInternal(int fatherIdx, int arrayLB, int arrayUB) {
         final int[] values = curValues;
         final int[] indices = tupleIdx;
+        // final int length = arrayUB - arrayLB;
+
+        // if (length <= 1) {
+        //     // 处理单个元素的情况
+        //     curLevelValues.add(values[indices[arrayLB]]);
+        //     curLevelValueParentIdx.add(fatherIdx);
+        //     curLevelValueBounds.add(arrayLB);
+        //     curLevelValueBounds.add(arrayUB);
+        //     return;
+        // }
+
+        // // 检查是否有序
+        // boolean isSorted = true;
+        // int prevValue = values[indices[arrayLB]];
+        // for (int j = arrayLB + 1; j < arrayUB; j++) {
+        //     int value = values[indices[j]];
+        //     if (value < prevValue) {
+        //         isSorted = false;
+        //         break;
+        //     }
+        //     prevValue = value;
+        // }
+
+        // if (!isSorted) {
+        //     // 优化排序逻辑
+        //     if(length <= 32) {
+        //         // 插入排序
+        //         insertionSort(arrayLB, arrayUB, tupleIdx, values);
+        //     }
+        //     // if (length < 1 << 16) {
+                
+        //     //     QuickSort.sort(arrayLB, arrayUB - 1, tupleIdx, values);
+        //     // } 
+        //     else {
+        //         int[] sorted = Arrays.stream(indices, arrayLB, arrayUB)
+        //             .parallel()
+        //             .boxed()
+        //             .sorted(Comparator.comparingInt(idx -> values[idx]))
+        //             .mapToInt(Integer::intValue)
+        //             .toArray();
+
+        //         System.arraycopy(sorted, 0, tupleIdx, arrayLB, sorted.length);
+        //     }
+        // }
 
         // 提取唯一值
         int currentStart = arrayLB;
@@ -178,5 +300,23 @@ public class Trie {
         curLevelValueParentIdx.add(fatherIdx);
         curLevelValueBounds.add(currentStart);
         curLevelValueBounds.add(arrayUB);
+    }
+
+    private void insertionSort(int start, int end, int[] indices, int[] values) {
+        // 实际排序范围：[start, end-1]
+        for (int i = start + 1; i < end; i++) {
+            int currentIndex = indices[i];
+            int currentValue = values[currentIndex];
+            int j = i - 1;
+
+            // 将大于当前元素的元素向后移动
+            while (j >= start && values[indices[j]] > currentValue) {
+                indices[j + 1] = indices[j];
+                j--;
+            }
+
+            // 插入当前元素到正确位置
+            indices[j + 1] = currentIndex;
+        }
     }
 }

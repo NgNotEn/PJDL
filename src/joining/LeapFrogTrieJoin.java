@@ -1,5 +1,6 @@
 package joining;
 
+import data.IntData;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -9,19 +10,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.BlockingQueue;
-
 import joining.result.JoinListGenerator;
 import query.ColumnRef;
-import util.CartesianProduct;
 
 public class LeapFrogTrieJoin {
 
     private final int totalVarCount; // 变量总数
     private Trie[] tries;   // 所有表的Trie数组
     
-    // 笛卡尔积生成器队列（静态，所有线程共享）
-    public static BlockingQueue<CartesianProductGenerator> generatorQueue;
     // 方便通过 var 找 tries
     private Trie[][] trieByVar;
     private Map<Integer, String> aliasID2Col;   // 列名映射​​。用于在执行时，根据表的ID查找当前需要处理的列名。
@@ -31,8 +27,17 @@ public class LeapFrogTrieJoin {
 
     private JoinListGenerator generator; // 连接列表生成器（JoinListGenerator），用于生成连接任务。
 
+
+
+    AggregateData[] aggregateDatas;
+    Map<Integer, List<Integer>> aggregateInfo;
+
+
+
     // 优化后的构造函数,初始化所有Trie（并行创建）
     public LeapFrogTrieJoin(Trie[] tries) throws Exception {
+        this.aggregateDatas = JoinProcessor.aggregateDatas;
+        this.aggregateInfo = JoinProcessor.aggregateInfo;
         
         // 获取变量总数
         totalVarCount = TrieManager.totalVarCount;
@@ -292,9 +297,7 @@ public class LeapFrogTrieJoin {
         }
     }
 
-    public List<int[]> genResultTuple() {
-
-
+    public int[] genResultTuple() {
         List<int[]> tuples = generator.genResult();
 
         final int cnt = tries.length;
@@ -303,7 +306,8 @@ public class LeapFrogTrieJoin {
             tries[i].lastLevel();
         }
 
-        List<int[]> joinResult = new ArrayList<>();
+        int[] joinResult = new int[this.aggregateDatas.length];
+        Arrays.fill(joinResult, -1);
         
     
         for (final int[] tuple : tuples) {
@@ -328,14 +332,31 @@ public class LeapFrogTrieJoin {
                     dimensions.add(result);
                 }
             }
-            
-            List<List<Integer>> finalResults = CartesianProduct.constructCombinations(dimensions);
-            List<int[]> results = new ArrayList<>();
-            for (List<Integer> finalResult : finalResults) {
-                results.add(finalResult.stream().mapToInt(Integer::intValue).toArray());
-            }
-            joinResult.addAll(results);
+            getAggregateResult(dimensions, joinResult);
         }
         return joinResult;
+    }
+
+    void getAggregateResult(List<List<Integer>> results, int[] joinResult) {
+        int aliasCtr = 0;
+        for (List<Integer> rids: results) {
+            if (aggregateInfo.containsKey(aliasCtr)) {
+                for (int aggregateColumnCtr : aggregateInfo.get(aliasCtr)) {
+                    IntData columnData = (IntData) this.aggregateDatas[aggregateColumnCtr].columnData;
+                    for (int row : rids) {
+                        int value = columnData.data[row];
+                        if (joinResult[aggregateColumnCtr] != -1) {
+                            if ((value < joinResult[aggregateColumnCtr] && aggregateDatas[aggregateColumnCtr].isMin)
+                                    || (value > joinResult[aggregateColumnCtr]
+                                            && !aggregateDatas[aggregateColumnCtr].isMin))
+                                joinResult[aggregateColumnCtr] = value;
+                        } else {
+                            joinResult[aggregateColumnCtr] = value;
+                        }
+                    }
+                }
+            }
+            aliasCtr++;
+        }
     }
 }

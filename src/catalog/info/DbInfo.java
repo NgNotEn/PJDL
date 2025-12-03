@@ -36,8 +36,8 @@ public class DbInfo implements Serializable {
 	public DbInfo(String name) {
 		this.name = name;
 		// Using concurrent data structure allows threads
-		// to update catalog in joining.parallel (e.g., if generating
-		// multiple intermediate results in joining.parallel).
+		// to update catalog in parallel (e.g., if generating
+		// multiple intermediate results in parallel).
 		this.nameToTable = new ConcurrentHashMap<>();
 	}
 	/**
@@ -47,11 +47,11 @@ public class DbInfo implements Serializable {
 	 */
 	public void addTable(TableInfo table) throws Exception {
 		// Make sure that no table of same name exists
-		if (nameToTable.containsKey(table.name)) {
-			throw new Exception("Error - table " + 
-					table.name + " already exists!");
-		}
-		// Insert table
+//		if (nameToTable.containsKey(table.name)) {
+//			throw new Exception("Error - table " +
+//					table.name + " already exists!");
+//		}
+		// Insert table, we override the existing table
 		nameToTable.put(table.name, table);
 	}
 	/**

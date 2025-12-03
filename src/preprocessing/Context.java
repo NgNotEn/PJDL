@@ -1,12 +1,9 @@
 package preprocessing;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import operators.Group;
-import operators.parallel.GroupIndex;
 import query.ColumnRef;
 
 /**
@@ -32,6 +29,9 @@ public class Context {
 	 */
 	public final Map<String, String> aliasToFiltered =
 			new ConcurrentHashMap<String, String>();
+
+	public final Map<String, String> aliasToDistinct =
+			new ConcurrentHashMap<String, String>();
 	/**
 	 * References column that contains group IDs for
 	 * each row in the join result (null if query
@@ -43,12 +43,6 @@ public class Context {
 	 * does not have a group by clause).
 	 */
 	public int nrGroups = -1;
-	/**
-	 * Maps each group
-	 * to an index containing group id and satisfied rows.
-	 */
-	public Map<Group, GroupIndex> groupsToIndex;
-	public Map<Group, List<Group>> groupsToList;
 	/**
 	 * Maps aggregation expressions (in string representation)
 	 * to columns containing corresponding (per-group) results.

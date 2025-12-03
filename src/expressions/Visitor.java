@@ -13,7 +13,7 @@ import query.SQLexception;
  * @author immanueltrummer
  *
  */
-public abstract class SkinnerVisitor implements ExpressionVisitor {
+public abstract class Visitor implements ExpressionVisitor {
 	/**
 	 * List of exceptions produced while traversing expression.
 	 * If this list is empty, it means that no error occurred.

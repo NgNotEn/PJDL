@@ -1,6 +1,5 @@
 package expressions.normalization;
 
-import java.math.BigDecimal;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -11,7 +10,7 @@ import java.util.Set;
 
 import buffer.BufferManager;
 import data.Dictionary;
-import expressions.SkinnerVisitor;
+import expressions.Visitor;
 import net.sf.jsqlparser.expression.AllComparisonExpression;
 import net.sf.jsqlparser.expression.AnalyticExpression;
 import net.sf.jsqlparser.expression.AnyComparisonExpression;
@@ -84,20 +83,20 @@ import query.where.WhereUtil;
  * Rewrites the original SQL query into a simplified query.
  * Tasks include;
  * - Rewriting certain SQL constructs (e.g., IN, BETWEEN) in terms
- * 		of simpler constructs that are directly supported by the
- * 		predicate compiler.
+ * of simpler constructs that are directly supported by the
+ * predicate compiler.
  * - Pre-calculating expressions that contain only constants
- * 		(avoids recalculating them for each tuple at run time).
+ * (avoids recalculating them for each tuple at run time).
  * 
  * 
  * @author immanueltrummer
  *
  */
-public class SimplificationVisitor extends SkinnerVisitor {
+public class SimplificationVisitor extends Visitor {
 	/**
 	 * Rewritten query fragments - finally contains rewritten query.
 	 */
-	public Deque<Expression> opStack = new ArrayDeque<>(); 
+	public Deque<Expression> opStack = new ArrayDeque<>();
 
 	@Override
 	public void visit(NullValue arg0) {
@@ -116,9 +115,9 @@ public class SimplificationVisitor extends SkinnerVisitor {
 			}
 			// Combine rewritten operands in expression list
 			int nrParams = params.size();
-			for (int i=0; i<nrParams; ++i) {
+			for (int i = 0; i < nrParams; ++i) {
 				newParams.add(0, opStack.pop());
-			}			
+			}
 		}
 		// Create new function expression and push on the stack
 		Function newFunction = new Function();
@@ -162,35 +161,30 @@ public class SimplificationVisitor extends SkinnerVisitor {
 			caseResultNull.setElseExpression(newFunction);
 			opStack.push(caseResultNull);
 		} else if (fctName.equals("avg")) {
-//			// Sum over average input expression and cast to double
-//			newFunction.setName("sum");
-//			newFunction.setAllColumns(false);
-//			newFunction.setParameters(new ExpressionList(newParams));
-//			CastExpression newCast = new CastExpression();
-//			newCast.setLeftExpression(newFunction);
-//			ColDataType doubleType = new ColDataType();
-//			doubleType.setDataType("double");
-//			newCast.setType(doubleType);
-//			// Divide by the count of average input
-//			Function divisorFct = new Function();
-//			divisorFct.setAllColumns(false);
-//			divisorFct.setDistinct(false);
-//			divisorFct.setEscaped(false);
-//			divisorFct.setName("count");
-//			divisorFct.setParameters(new ExpressionList(newParams));
-//			Division division = new Division();
-//			division.setLeftExpression(newCast);
-//			division.setRightExpression(divisorFct);
-//			// Still need to rewrite the count statement
-//			division.accept(this);
-			newFunction.setName(arg0.getName());
-			newFunction.setAllColumns(arg0.isAllColumns());
+			// Sum over average input expression and cast to double
+			newFunction.setName("sum");
+			newFunction.setAllColumns(false);
 			newFunction.setParameters(new ExpressionList(newParams));
-			opStack.push(newFunction);
-
+			CastExpression newCast = new CastExpression();
+			newCast.setLeftExpression(newFunction);
+			ColDataType doubleType = new ColDataType();
+			doubleType.setDataType("double");
+			newCast.setType(doubleType);
+			// Divide by the count of average input
+			Function divisorFct = new Function();
+			divisorFct.setAllColumns(false);
+			divisorFct.setDistinct(false);
+			divisorFct.setEscaped(false);
+			divisorFct.setName("count");
+			divisorFct.setParameters(new ExpressionList(newParams));
+			Division division = new Division();
+			division.setLeftExpression(newCast);
+			division.setRightExpression(divisorFct);
+			// Still need to rewrite the count statement
+			division.accept(this);
 		} else {
 			newFunction.setName(arg0.getName());
-			newFunction.setAllColumns(arg0.isAllColumns());	
+			newFunction.setAllColumns(arg0.isAllColumns());
 			newFunction.setParameters(new ExpressionList(newParams));
 			opStack.push(newFunction);
 		}
@@ -254,17 +248,18 @@ public class SimplificationVisitor extends SkinnerVisitor {
 	public void visit(StringValue arg0) {
 		opStack.push(arg0);
 	}
+
 	/**
 	 * Tries to resolve an arithmetic expression with
 	 * constant operands (to avoid recalculating it
 	 * for each tuple at run time).
 	 * 
-	 * @param oldBinaryOp	original binary operation expression
-	 * @param newBinaryOp	new binary operation expression -
-	 * 						used to infer type of arithmetic
-	 * 						operation and as default result.
+	 * @param oldBinaryOp original binary operation expression
+	 * @param newBinaryOp new binary operation expression -
+	 *                    used to infer type of arithmetic
+	 *                    operation and as default result.
 	 */
-	void treatBinaryArithmetic(BinaryExpression oldBinaryOp, 
+	void treatBinaryArithmetic(BinaryExpression oldBinaryOp,
 			BinaryExpression newBinaryOp) {
 		// Recursive invocation fills operand stack
 		oldBinaryOp.getLeftExpression().accept(this);
@@ -277,8 +272,8 @@ public class SimplificationVisitor extends SkinnerVisitor {
 			opStack.push(new NullValue());
 		} else if (op1 instanceof LongValue && op2 instanceof LongValue) {
 			// Resolve operation on two constants of type long
-			long longVal1 = ((LongValue)op1).getValue();
-			long longVal2 = ((LongValue)op2).getValue();
+			long longVal1 = ((LongValue) op1).getValue();
+			long longVal2 = ((LongValue) op2).getValue();
 			if (newBinaryOp instanceof Addition) {
 				opStack.push(new LongValue(
 						longVal1 + longVal2));
@@ -299,35 +294,25 @@ public class SimplificationVisitor extends SkinnerVisitor {
 				newBinaryOp.setRightExpression(op2);
 				opStack.push(newBinaryOp);
 			}
-		}
-		// TODO: precision issues
-		else if (op1 instanceof DoubleValue && op2 instanceof DoubleValue) {
+		} else if (op1 instanceof DoubleValue && op2 instanceof DoubleValue) {
 			// Resolve operation on two constants of type double
-			double doubleVal1 = ((DoubleValue)op1).getValue();
-			double doubleVal2 = ((DoubleValue)op2).getValue();
+			double doubleVal1 = ((DoubleValue) op1).getValue();
+			double doubleVal2 = ((DoubleValue) op2).getValue();
+			DoubleValue result = new DoubleValue("0");
 			if (newBinaryOp instanceof Addition) {
-				BigDecimal d1 = BigDecimal.valueOf(doubleVal1);
-				BigDecimal d2 = BigDecimal.valueOf(doubleVal2);
-				String value = d1.add(d2).toString();
-				DoubleValue result = new DoubleValue(value);
+				result.setValue(doubleVal1 + doubleVal2);
 				opStack.push(result);
 			} else if (newBinaryOp instanceof Subtraction) {
-				BigDecimal d1 = BigDecimal.valueOf(doubleVal1);
-				BigDecimal d2 = BigDecimal.valueOf(doubleVal2);
-				String value = d1.subtract(d2).toString();
-				DoubleValue result = new DoubleValue(value);
+				result.setValue(doubleVal1 - doubleVal2);
 				opStack.push(result);
 			} else if (newBinaryOp instanceof Multiplication) {
-				double value = doubleVal1 * doubleVal2;
-				DoubleValue result = new DoubleValue(String.valueOf(value));
+				result.setValue(doubleVal1 * doubleVal2);
 				opStack.push(result);
 			} else if (newBinaryOp instanceof Division) {
-				double value = doubleVal1 / doubleVal2;
-				DoubleValue result = new DoubleValue(String.valueOf(value));
+				result.setValue(doubleVal1 / doubleVal2);
 				opStack.push(result);
 			} else if (newBinaryOp instanceof Modulo) {
-				double value = doubleVal1 % doubleVal2;
-				DoubleValue result = new DoubleValue(String.valueOf(value));
+				result.setValue(doubleVal1 % doubleVal2);
 				opStack.push(result);
 			} else {
 				newBinaryOp.setLeftExpression(op1);
@@ -374,30 +359,27 @@ public class SimplificationVisitor extends SkinnerVisitor {
 		Expression op1 = opStack.pop();
 		// Try to resolve constants before run time
 		if (op1 instanceof LongValue && op2 instanceof LongValue) {
-			long val1 = ((LongValue)op1).getValue();
-			long val2 = ((LongValue)op2).getValue();
+			long val1 = ((LongValue) op1).getValue();
+			long val2 = ((LongValue) op2).getValue();
 			opStack.push(new LongValue(val1 * val2));
 		} else if (op1 instanceof NullValue && op2 instanceof NullValue) {
 			opStack.push(new NullValue());
 		} else {
-			AndExpression newAnd = new AndExpression(op1, op2);
-			if (arg0.isNot()) {
-				newAnd.setNot();
-			}
-			opStack.push(newAnd);
+			opStack.push(new AndExpression(op1, op2));
 		}
 	}
+
 	/**
 	 * Separates a list of input expressions into expressions
 	 * that match one element in another given list of expressions
 	 * (textual matching) and the remaining elements.
 	 * 
-	 * @param inputs		triage those expressions
-	 * @param comparisons	compare input against those expressions
-	 * @param matches		will contain input matching comparison list
-	 * @param noMatches		will contain input not matching comparison
+	 * @param inputs      triage those expressions
+	 * @param comparisons compare input against those expressions
+	 * @param matches     will contain input matching comparison list
+	 * @param noMatches   will contain input not matching comparison
 	 */
-	void triageByComparison(List<Expression> inputs, List<Expression> comparisons, 
+	void triageByComparison(List<Expression> inputs, List<Expression> comparisons,
 			List<Expression> matches, List<Expression> nonMatches) {
 		// Prepare fast string comparisons
 		Set<String> comparisonStrs = new HashSet<>();
@@ -425,8 +407,8 @@ public class SimplificationVisitor extends SkinnerVisitor {
 		Expression op1 = opStack.pop();
 		// Try to resolve constants before run time
 		if (op1 instanceof LongValue && op2 instanceof LongValue) {
-			long val1 = ((LongValue)op1).getValue();
-			long val2 = ((LongValue)op2).getValue();
+			long val1 = ((LongValue) op1).getValue();
+			long val2 = ((LongValue) op2).getValue();
 			opStack.push(new LongValue(Math.max(val1, val2)));
 		} else if (op1 instanceof NullValue && op2 instanceof NullValue) {
 			opStack.push(new NullValue());
@@ -442,13 +424,13 @@ public class SimplificationVisitor extends SkinnerVisitor {
 			List<Expression> leftCommon = new ArrayList<>();
 			List<Expression> rightUnique = new ArrayList<>();
 			List<Expression> rightCommon = new ArrayList<>();
-			triageByComparison(leftConjuncts, rightConjuncts, 
+			triageByComparison(leftConjuncts, rightConjuncts,
 					leftCommon, leftUnique);
-			triageByComparison(rightConjuncts, leftConjuncts, 
+			triageByComparison(rightConjuncts, leftConjuncts,
 					rightCommon, rightUnique);
 			// Did we find common expressions?
 			if (leftCommon.isEmpty()) {
-				opStack.push(new OrExpression(op1, op2));				
+				opStack.push(new OrExpression(op1, op2));
 			} else {
 				Expression andLeft = WhereUtil.conjunction(leftUnique);
 				Expression andRight = WhereUtil.conjunction(rightUnique);
@@ -465,8 +447,7 @@ public class SimplificationVisitor extends SkinnerVisitor {
 				// Create conjunction between unique and non-uniqe
 				// parts, simplify if possible.
 				Expression andCommon = WhereUtil.conjunction(leftCommon);
-				Expression newAnd = newOr==null?andCommon:
-						new AndExpression(andCommon, newOr);
+				Expression newAnd = newOr == null ? andCommon : new AndExpression(andCommon, newOr);
 				opStack.push(newAnd);
 			}
 		}
@@ -483,14 +464,15 @@ public class SimplificationVisitor extends SkinnerVisitor {
 		AndExpression and = new AndExpression(gte, mte);
 		and.accept(this);
 	}
+
 	/**
 	 * Rewrites a binary comparison expression and tries
 	 * to resolve comparisons with constants.
 	 * 
-	 * @param oldBinaryCmp	old (=non-rewritten) comparison
-	 * @param newBinaryCmp	empty shell for producing new comparison
+	 * @param oldBinaryCmp old (=non-rewritten) comparison
+	 * @param newBinaryCmp empty shell for producing new comparison
 	 */
-	void treatBinaryComparison(BinaryExpression oldBinaryCmp, 
+	void treatBinaryComparison(BinaryExpression oldBinaryCmp,
 			BinaryExpression newBinaryCmp) {
 		// Rewrite operands
 		oldBinaryCmp.getLeftExpression().accept(this);
@@ -501,52 +483,52 @@ public class SimplificationVisitor extends SkinnerVisitor {
 		if (op1 instanceof NullValue || op2 instanceof NullValue) {
 			opStack.push(new NullValue());
 		} else if (op1 instanceof LongValue && op2 instanceof LongValue) {
-			long val1 = ((LongValue)op1).getValue();
-			long val2 = ((LongValue)op2).getValue();
+			long val1 = ((LongValue) op1).getValue();
+			long val2 = ((LongValue) op2).getValue();
 			if (newBinaryCmp instanceof EqualsTo) {
-				opStack.push(new LongValue(val1 == val2?1:0));
+				opStack.push(new LongValue(val1 == val2 ? 1 : 0));
 			} else if (newBinaryCmp instanceof GreaterThan) {
-				opStack.push(new LongValue(val1 > val2?1:0));
+				opStack.push(new LongValue(val1 > val2 ? 1 : 0));
 			} else if (newBinaryCmp instanceof GreaterThanEquals) {
-				opStack.push(new LongValue(val1 >= val2?1:0));
+				opStack.push(new LongValue(val1 >= val2 ? 1 : 0));
 			} else if (newBinaryCmp instanceof MinorThan) {
-				opStack.push(new LongValue(val1 < val2?1:0));
+				opStack.push(new LongValue(val1 < val2 ? 1 : 0));
 			} else if (newBinaryCmp instanceof MinorThanEquals) {
-				opStack.push(new LongValue(val1 <= val2?1:0));
+				opStack.push(new LongValue(val1 <= val2 ? 1 : 0));
 			} else if (newBinaryCmp instanceof NotEqualsTo) {
-				opStack.push(new LongValue(val1 != val2?1:0));
+				opStack.push(new LongValue(val1 != val2 ? 1 : 0));
 			} else {
 				newBinaryCmp.setLeftExpression(op1);
 				newBinaryCmp.setRightExpression(op2);
 				opStack.push(newBinaryCmp);
 			}
 		} else if (op1 instanceof DoubleValue && op2 instanceof DoubleValue) {
-			double val1 = ((DoubleValue)op1).getValue();
-			double val2 = ((DoubleValue)op2).getValue();
+			double val1 = ((DoubleValue) op1).getValue();
+			double val2 = ((DoubleValue) op2).getValue();
 			if (newBinaryCmp instanceof EqualsTo) {
-				opStack.push(new LongValue(val1 == val2?1:0));
+				opStack.push(new LongValue(val1 == val2 ? 1 : 0));
 			} else if (newBinaryCmp instanceof GreaterThan) {
-				opStack.push(new LongValue(val1 > val2?1:0));
+				opStack.push(new LongValue(val1 > val2 ? 1 : 0));
 			} else if (newBinaryCmp instanceof GreaterThanEquals) {
-				opStack.push(new LongValue(val1 >= val2?1:0));
+				opStack.push(new LongValue(val1 >= val2 ? 1 : 0));
 			} else if (newBinaryCmp instanceof MinorThan) {
-				opStack.push(new LongValue(val1 < val2?1:0));
+				opStack.push(new LongValue(val1 < val2 ? 1 : 0));
 			} else if (newBinaryCmp instanceof MinorThanEquals) {
-				opStack.push(new LongValue(val1 <= val2?1:0));
+				opStack.push(new LongValue(val1 <= val2 ? 1 : 0));
 			} else if (newBinaryCmp instanceof NotEqualsTo) {
-				opStack.push(new LongValue(val1 != val2?1:0));
+				opStack.push(new LongValue(val1 != val2 ? 1 : 0));
 			} else {
 				newBinaryCmp.setLeftExpression(op1);
 				newBinaryCmp.setRightExpression(op2);
 				opStack.push(newBinaryCmp);
 			}
-		} else if (oldBinaryCmp instanceof EqualsTo && 
+		} else if (oldBinaryCmp instanceof EqualsTo &&
 				((op1 instanceof StringValue && op2 instanceof Column) ||
 						(op1 instanceof Column && op2 instanceof StringValue))) {
-			StringValue stringVal = (StringValue)(op1 instanceof StringValue?op1:op2);
+			StringValue stringVal = (StringValue) (op1 instanceof StringValue ? op1 : op2);
 			// Is string value not in dictionary (if available)?
 			Dictionary curDic = BufferManager.dictionary;
-			if (curDic != null && curDic.getCode(stringVal.getValue())<0) {
+			if (curDic != null && curDic.getCode(stringVal.getValue()) < 0) {
 				opStack.push(new LongValue(0));
 			} else {
 				newBinaryCmp.setLeftExpression(op1);
@@ -564,28 +546,20 @@ public class SimplificationVisitor extends SkinnerVisitor {
 	public void visit(EqualsTo arg0) {
 		EqualsTo newEquals = new EqualsTo();
 		treatBinaryComparison(arg0, newEquals);
-		if (arg0.isNot()) {
-			newEquals.setNot();
-		}
 	}
 
 	@Override
 	public void visit(GreaterThan arg0) {
 		GreaterThan newGt = new GreaterThan();
 		treatBinaryComparison(arg0, newGt);
-		if (arg0.isNot()) {
-			newGt.setNot();
-		}
 	}
 
 	@Override
 	public void visit(GreaterThanEquals arg0) {
 		GreaterThanEquals newGte = new GreaterThanEquals();
 		treatBinaryComparison(arg0, newGte);
-		if (arg0.isNot()) {
-			newGte.setNot();
-		}
 	}
+
 	/**
 	 * We transform an in expression into nested OR expressions.
 	 */
@@ -593,7 +567,7 @@ public class SimplificationVisitor extends SkinnerVisitor {
 	public void visit(InExpression arg0) {
 		ItemsList rightItems = arg0.getRightItemsList();
 		if (rightItems instanceof ExpressionList) {
-			List<Expression> exps = ((ExpressionList)rightItems).getExpressions();
+			List<Expression> exps = ((ExpressionList) rightItems).getExpressions();
 			if (exps.isEmpty()) {
 				// Empty list -> Always false
 				opStack.push(new LongValue(0));
@@ -650,27 +624,18 @@ public class SimplificationVisitor extends SkinnerVisitor {
 	public void visit(MinorThan arg0) {
 		MinorThan newMt = new MinorThan();
 		treatBinaryComparison(arg0, newMt);
-		if (arg0.isNot()) {
-			newMt.setNot();
-		}
 	}
 
 	@Override
 	public void visit(MinorThanEquals arg0) {
 		MinorThanEquals newMte = new MinorThanEquals();
 		treatBinaryComparison(arg0, newMte);
-		if (arg0.isNot()) {
-			newMte.setNot();
-		}
 	}
 
 	@Override
 	public void visit(NotEqualsTo arg0) {
 		NotEqualsTo newNe = new NotEqualsTo();
 		treatBinaryComparison(arg0, newNe);
-		if (arg0.isNot()) {
-			newNe.setNot();
-		}
 	}
 
 	@Override
@@ -681,7 +646,7 @@ public class SimplificationVisitor extends SkinnerVisitor {
 	@Override
 	public void visit(SubSelect arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -728,19 +693,19 @@ public class SimplificationVisitor extends SkinnerVisitor {
 	@Override
 	public void visit(ExistsExpression arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(AllComparisonExpression arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(AnyComparisonExpression arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -752,39 +717,39 @@ public class SimplificationVisitor extends SkinnerVisitor {
 		if (op1 instanceof NullValue || op2 instanceof NullValue) {
 			opStack.push(new NullValue());
 		} else if (op1 instanceof StringValue && op2 instanceof StringValue) {
-			String s1 = ((StringValue)op1).getValue();
-			String s2 = ((StringValue)op2).getValue();
+			String s1 = ((StringValue) op1).getValue();
+			String s2 = ((StringValue) op2).getValue();
 			opStack.push(new StringValue(s1.concat(s2)));
 		} else {
 			Concat newConcat = new Concat();
 			newConcat.setLeftExpression(op1);
 			newConcat.setRightExpression(op2);
-			opStack.push(newConcat);			
+			opStack.push(newConcat);
 		}
 	}
 
 	@Override
 	public void visit(Matches arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(BitwiseAnd arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(BitwiseOr arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(BitwiseXor arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -809,13 +774,13 @@ public class SimplificationVisitor extends SkinnerVisitor {
 	@Override
 	public void visit(AnalyticExpression arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(WithinGroupExpression arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -837,78 +802,78 @@ public class SimplificationVisitor extends SkinnerVisitor {
 	@Override
 	public void visit(OracleHierarchicalExpression arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(RegExpMatchOperator arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(JsonExpression arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(JsonOperator arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(RegExpMySQLOperator arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(UserVariable arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(NumericBind arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(KeepExpression arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(MySQLGroupConcat arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(RowConstructor arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(OracleHint arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(TimeKeyExpression arg0) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(DateTimeLiteralExpression arg0) {
-		opStack.push(arg0);		
+		opStack.push(arg0);
 	}
 
 	@Override
@@ -918,7 +883,7 @@ public class SimplificationVisitor extends SkinnerVisitor {
 		if (newExp instanceof NullValue) {
 			opStack.push(new NullValue());
 		} else if (newExp instanceof LongValue) {
-			long val = ((LongValue)newExp).getValue();
+			long val = ((LongValue) newExp).getValue();
 			opStack.push(new LongValue(1 - val));
 		} else {
 			opStack.push(new NotExpression(newExp));

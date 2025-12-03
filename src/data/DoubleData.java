@@ -2,15 +2,12 @@ package data;
 
 import java.io.FileOutputStream;
 import java.io.ObjectOutputStream;
-import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.BitSet;
-import java.util.Collection;
 import java.util.List;
 
-import indexing.Index;
-import joining.result.ResultTuple;
+//import joining.result.ResultTuple;
 
 /**
  * Represents content of numeric column.
@@ -18,19 +15,41 @@ import joining.result.ResultTuple;
  * @author immanueltrummer
  *
  */
-public class DoubleData extends ColumnData implements Serializable {
+public class DoubleData extends ColumnData {
 	/**
 	 * Holds double data.
 	 */
 	public final double[] data;
+
+	public double min;
+
+	public double max;
+
 	/**
 	 * Initializes data array for given cardinality.
 	 * 
-	 * @param cardinality	number of rows
+	 * @param cardinality number of rows
 	 */
 	public DoubleData(int cardinality) {
 		super(cardinality);
 		this.data = new double[cardinality];
+	}
+
+	public void updateMinMax() {
+		if (data.length == 0)
+			return;
+
+		min = Double.MAX_VALUE;
+		max = Double.MIN_VALUE;
+
+		for (int i = 0; i < data.length; i++) {
+			if (!isNull.get(i)) {
+				if (data[i] < min)
+					min = data[i];
+				if (data[i] > max)
+					max = data[i];
+			}
+		}
 	}
 
 	@Override
@@ -38,13 +57,8 @@ public class DoubleData extends ColumnData implements Serializable {
 		if (isNull.get(row1) || isNull.get(row2)) {
 			return 2;
 		} else {
-			return Double.compare(data[row1], data[row2]);			
+			return Double.compare(data[row1], data[row2]);
 		}
-	}
-
-	@Override
-	public long longForRow(int row) {
-		return Double.doubleToRawLongBits(data[row]);
 	}
 
 	@Override
@@ -78,12 +92,12 @@ public class DoubleData extends ColumnData implements Serializable {
 		int copiedRowCtr = 0;
 		for (int row : rowsToCopy) {
 			// Treat special case: insertion of null values
-			if (row==-1) {
+			if (row == -1) {
 				copyColumn.data[copiedRowCtr] = 0;
 				copyColumn.isNull.set(copiedRowCtr);
 			} else {
 				copyColumn.data[copiedRowCtr] = data[row];
-				copyColumn.isNull.set(copiedRowCtr, isNull.get(row));				
+				copyColumn.isNull.set(copiedRowCtr, isNull.get(row));
 			}
 			++copiedRowCtr;
 		}
@@ -91,26 +105,11 @@ public class DoubleData extends ColumnData implements Serializable {
 	}
 
 	@Override
-	public ColumnData copyRangeRows(int first, int last, Index index) {
-		int cardinality = last - first;
-		DoubleData copyColumn = new DoubleData(cardinality);
-		int copiedRowCtr = 0;
-		for (int rid = first; rid < last; rid++) {
-			int row = index.sortedRow[rid];
-			// Treat special case: insertion of null values
-			copyColumn.data[copiedRowCtr] = data[row];
-			copyColumn.isNull.set(copiedRowCtr, isNull.get(row));
-			++copiedRowCtr;
-		}
-		return copyColumn;
-	}
-
-	@Override
-	public ColumnData copyRows(Collection<ResultTuple> tuples, int tableIdx) {
+	public ColumnData copyRows(List<int[]> tuples, int tableIdx) {
 		DoubleData copyColumn = new DoubleData(tuples.size());
 		int copiedRowCtr = 0;
-		for (ResultTuple compositeTuple : tuples) {
-			int baseTuple = compositeTuple.baseIndices[tableIdx];
+		for (int[] compositeTuple : tuples) {
+			int baseTuple = compositeTuple[tableIdx];
 			copyColumn.data[copiedRowCtr] = data[baseTuple];
 			copyColumn.isNull.set(copiedRowCtr, isNull.get(baseTuple));
 			++copiedRowCtr;
@@ -122,8 +121,7 @@ public class DoubleData extends ColumnData implements Serializable {
 	public ColumnData copyRows(BitSet rowsToCopy) {
 		DoubleData copyColumn = new DoubleData(rowsToCopy.cardinality());
 		int copiedRowCtr = 0;
-		for (int row=rowsToCopy.nextSetBit(0); row!=-1; 
-				row=rowsToCopy.nextSetBit(row+1)) {
+		for (int row = rowsToCopy.nextSetBit(0); row != -1; row = rowsToCopy.nextSetBit(row + 1)) {
 			copyColumn.data[copiedRowCtr] = data[row];
 			copyColumn.isNull.set(copiedRowCtr, isNull.get(row));
 			++copiedRowCtr;

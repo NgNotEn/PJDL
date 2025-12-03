@@ -2,8 +2,7 @@ package expressions.normalization;
 
 import java.util.List;
 
-import expressions.SkinnerDeprVisitor;
-import expressions.SkinnerVisitor;
+import expressions.Visitor;
 import net.sf.jsqlparser.expression.AllComparisonExpression;
 import net.sf.jsqlparser.expression.AnalyticExpression;
 import net.sf.jsqlparser.expression.AnyComparisonExpression;
@@ -14,7 +13,6 @@ import net.sf.jsqlparser.expression.DateTimeLiteralExpression;
 import net.sf.jsqlparser.expression.DateValue;
 import net.sf.jsqlparser.expression.DoubleValue;
 import net.sf.jsqlparser.expression.Expression;
-import net.sf.jsqlparser.expression.ExpressionVisitor;
 import net.sf.jsqlparser.expression.ExtractExpression;
 import net.sf.jsqlparser.expression.Function;
 import net.sf.jsqlparser.expression.HexValue;
@@ -74,26 +72,25 @@ import net.sf.jsqlparser.statement.select.SubSelect;
  * Visits each node in an expression without any action. This
  * class serves as super class for specialized classes that
  * only need to treat specific node types (the corresponding
- * methods are overridden). 
+ * methods are overridden).
  * 
  * @author immanueltrummer
  *
  */
-public class PlainVisitor extends SkinnerVisitor {
+public class PlainVisitor extends Visitor {
 
 	@Override
 	public void visit(NullValue nullValue) {
-		
+
 	}
 
 	@Override
 	public void visit(Function function) {
 		ExpressionList paramList = function.getParameters();
 		if (paramList != null) {
-			for (Expression parameterExpression :
-				paramList.getExpressions()) {
+			for (Expression parameterExpression : paramList.getExpressions()) {
 				parameterExpression.accept(this);
-			}			
+			}
 		}
 	}
 
@@ -105,43 +102,43 @@ public class PlainVisitor extends SkinnerVisitor {
 	@Override
 	public void visit(JdbcParameter jdbcParameter) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(JdbcNamedParameter jdbcNamedParameter) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(DoubleValue doubleValue) {
-		
+
 	}
 
 	@Override
 	public void visit(LongValue longValue) {
-		
+
 	}
 
 	@Override
 	public void visit(HexValue hexValue) {
-		
+
 	}
 
 	@Override
 	public void visit(DateValue dateValue) {
-		
+
 	}
 
 	@Override
 	public void visit(TimeValue timeValue) {
-		
+
 	}
 
 	@Override
 	public void visit(TimestampValue timestampValue) {
-		
+
 	}
 
 	@Override
@@ -151,9 +148,9 @@ public class PlainVisitor extends SkinnerVisitor {
 
 	@Override
 	public void visit(StringValue stringValue) {
-		
+
 	}
-	
+
 	void treatBinary(BinaryExpression binaryExpr) {
 		binaryExpr.getLeftExpression().accept(this);
 		binaryExpr.getRightExpression().accept(this);
@@ -214,8 +211,7 @@ public class PlainVisitor extends SkinnerVisitor {
 	@Override
 	public void visit(InExpression inExpression) {
 		inExpression.getLeftExpression().accept(this);
-		List<Expression> expressionsInList = ((ExpressionList)
-				inExpression.getRightItemsList()).getExpressions();
+		List<Expression> expressionsInList = ((ExpressionList) inExpression.getRightItemsList()).getExpressions();
 		for (Expression expr : expressionsInList) {
 			expr.accept(this);
 		}
@@ -248,13 +244,13 @@ public class PlainVisitor extends SkinnerVisitor {
 
 	@Override
 	public void visit(Column tableColumn) {
-		
+
 	}
 
 	@Override
 	public void visit(SubSelect subSelect) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -279,19 +275,19 @@ public class PlainVisitor extends SkinnerVisitor {
 	@Override
 	public void visit(ExistsExpression existsExpression) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(AllComparisonExpression allComparisonExpression) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(AnyComparisonExpression anyComparisonExpression) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -332,13 +328,13 @@ public class PlainVisitor extends SkinnerVisitor {
 	@Override
 	public void visit(AnalyticExpression aexpr) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(WithinGroupExpression wgexpr) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
@@ -349,83 +345,83 @@ public class PlainVisitor extends SkinnerVisitor {
 	@Override
 	public void visit(IntervalExpression iexpr) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(OracleHierarchicalExpression oexpr) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(RegExpMatchOperator rexpr) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(JsonExpression jsonExpr) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(JsonOperator jsonExpr) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(RegExpMySQLOperator regExpMySQLOperator) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(UserVariable var) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(NumericBind bind) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(KeepExpression aexpr) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(MySQLGroupConcat groupConcat) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(RowConstructor rowConstructor) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(OracleHint hint) {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void visit(TimeKeyExpression timeKeyExpression) {
-		
+
 	}
 
 	@Override
 	public void visit(DateTimeLiteralExpression literal) {
-		
+
 	}
 
 	@Override

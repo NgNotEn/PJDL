@@ -4,7 +4,6 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 
-import catalog.CatalogManager;
 import catalog.info.ColumnInfo;
 import catalog.info.DbInfo;
 import catalog.info.TableInfo;

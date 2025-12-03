@@ -2,21 +2,17 @@ package indexing;
 
 import buffer.BufferManager;
 import catalog.CatalogManager;
+import catalog.info.DbInfo;
 import config.IndexingMode;
-import config.ParallelConfig;
 import data.ColumnData;
 import data.DoubleData;
 import data.IntData;
-import joining.BaseTrie;
-import joining.parallel.indexing.DoublePartitionIndex;
-import joining.parallel.indexing.IndexPolicy;
-import joining.parallel.indexing.IntPartitionIndex;
-import joining.parallel.indexing.PartitionIndex;
-import query.ColumnRef;
-import types.SQLtype;
-
 import java.util.*;
+import java.util.concurrent.ForkJoinPool;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import joining.BaseTrie;
+import query.ColumnRef;
 
 /**
  * Features utility functions for creating indexes.
@@ -24,23 +20,12 @@ import java.util.stream.IntStream;
  * @author immanueltrummer
  */
 public class Indexer {
-
-    private final static List<String> queryColumn = Arrays.asList(
-            "l_orderkey", "l_shipdate", "l_returnflag", "l_linestatus", "l_discount", "l_quantity", "l_commitdate", "l_receiptdate", "l_shipmode", "l_quantity", "l_suppkey", "l_shipinstruct",
-            "c_mktsegment", "c_custkey",
-            "o_orderdate", "o_year", "o_orderkey", "o_orderstatus",
-            "r_name",
-            "n_name",
-            "s_name",
-            "p_type", "p_name", "p_brand", "p_container", "p_size",
-            "ps_partkey");
-
     /**
      * Create an index on the specified column.
      *
      * @param colRef create index on this column
      */
-    public static void index(ColumnRef colRef, boolean sorted) throws Exception {
+    public static void index(ColumnRef colRef) throws Exception {
         // Check if index already exists
         if (!BufferManager.colToIndex.containsKey(colRef)) {
             ColumnData data = BufferManager.getData(colRef);
@@ -48,48 +33,9 @@ public class Indexer {
                 IntData intData = (IntData) data;
                 IntIndex index = new IntIndex(intData);
                 BufferManager.colToIndex.put(colRef, index);
-                if (sorted) {
-                    index.sortRows();
-                }
             } else if (data instanceof DoubleData) {
                 DoubleData doubleData = (DoubleData) data;
                 DoubleIndex index = new DoubleIndex(doubleData);
-                BufferManager.colToIndex.put(colRef, index);
-            }
-        }
-    }
-
-    /**
-     * Create an index on the specified column.
-     *
-     * @param colRef create index on this column
-     */
-    public static void partitionIndex(ColumnRef colRef, ColumnRef queryRef, PartitionIndex oldIndex,
-                                      boolean isPrimary, boolean isSeq, boolean sorted) throws Exception {
-        // Check if index already exists
-        if (!BufferManager.colToIndex.containsKey(colRef)) {
-            ColumnData data = BufferManager.getData(colRef);
-            if (data instanceof IntData) {
-                IntData intData = (IntData) data;
-                IntPartitionIndex intIndex = oldIndex == null ? null : (IntPartitionIndex) oldIndex;
-                int keySize = intIndex == null ? 0 : intIndex.keyToPositions.size();
-                IndexPolicy policy = Indexer.indexPolicy(isPrimary, isSeq, keySize, intData.cardinality);
-                IntPartitionIndex index = new IntPartitionIndex(intData, ParallelConfig.EXE_THREADS, colRef, queryRef,
-                        intIndex, policy);
-                if (sorted) {
-                    index.sortRows();
-                }
-                BufferManager.colToIndex.put(colRef, index);
-            } else if (data instanceof DoubleData) {
-                DoubleData doubleData = (DoubleData) data;
-                DoublePartitionIndex doubleIndex = oldIndex == null ? null : (DoublePartitionIndex) oldIndex;
-                int keySize = doubleIndex == null ? 0 : doubleIndex.keyToPositions.size();
-                IndexPolicy policy = Indexer.indexPolicy(isPrimary, isSeq, keySize, doubleData.cardinality);
-                DoublePartitionIndex index = new DoublePartitionIndex(doubleData, ParallelConfig.EXE_THREADS,
-                        colRef, queryRef, doubleIndex, policy);
-                if (sorted) {
-                    index.sortRows();
-                }
                 BufferManager.colToIndex.put(colRef, index);
             }
         }
@@ -104,147 +50,171 @@ public class Indexer {
     public static void indexAll(IndexingMode mode) throws Exception {
         System.out.println("Indexing all key columns ...");
         long startMillis = System.currentTimeMillis();
-        CatalogManager.currentDB.nameToTable.values().parallelStream().forEach(
-                tableInfo -> {
-                    tableInfo.nameToCol.values().parallelStream().forEach(
-                            columnInfo -> {
-                                try {
-//                                    && queryColumn.contains(columnInfo.name.toLowerCase())
-                                    if ((mode.equals(IndexingMode.ALL) ) ||
-                                            (mode.equals(IndexingMode.ONLY_KEYS) &&
-                                                    (columnInfo.isPrimary || columnInfo.isForeign))) {
-                                        String table = tableInfo.name;
-                                        String column = columnInfo.name;
-                                        ColumnRef colRef = new ColumnRef(table, column);
-                                        System.out.println("Indexing " + colRef + " ...");
-                                        boolean sorted = columnInfo.type == SQLtype.DATE;
-//								if (GeneralConfig.isParallel) {
-//									partitionIndex(colRef, colRef, null,
-//											columnInfo.isPrimary, true, sorted);
-//								}
-//								else {
-//									index(colRef, sorted);
-//								}
-                                        partitionIndex(colRef, colRef, null,
-                                                columnInfo.isPrimary, true, sorted);
-                                    }
-                                } catch (Exception e) {
-                                    System.err.println("Error indexing " + columnInfo);
-                                    e.printStackTrace();
-                                }
-                            }
-                    );
+
+        // 收集所有需要索引的列引用
+        List<ColumnRef> columnsToIndex = CatalogManager.currentDB.nameToTable.values()
+                .parallelStream()
+                .flatMap(tableInfo -> tableInfo.nameToCol.values().parallelStream()
+                        .filter(columnInfo -> mode.equals(IndexingMode.ALL) ||
+                                (mode.equals(IndexingMode.ONLY_KEYS) &&
+                                        (columnInfo.isPrimary || columnInfo.isForeign)))
+                        .map(columnInfo -> new ColumnRef(tableInfo.name, columnInfo.name)))
+                .collect(Collectors.toList());
+
+        // 使用自定义线程池进行并行索引
+        int numThreads = Math.min(columnsToIndex.size(), Runtime.getRuntime().availableProcessors());
+        ForkJoinPool customThreadPool = new ForkJoinPool(numThreads);
+
+        try {
+            customThreadPool.submit(() -> columnsToIndex.parallelStream().forEach(colRef -> {
+                try {
+                    System.out.println("Indexing " + colRef + " ...");
+                    index(colRef);
+                } catch (Exception e) {
+                    System.err.println("Error indexing " + colRef);
+                    e.printStackTrace();
                 }
-        );
+            })).get();
+        } finally {
+            customThreadPool.shutdown();
+        }
+
         long totalMillis = System.currentTimeMillis() - startMillis;
         System.out.println("Indexing took " + totalMillis + " ms.");
     }
 
-    public static IndexPolicy indexPolicy(boolean isPrimary, boolean isSeq, int keySize, int cardinality) {
-        IndexPolicy policy;
-        if (cardinality <= ParallelConfig.PARALLEL_SIZE || isSeq) {
-            policy = IndexPolicy.Sequential;
-        } else if (isPrimary) {
-            policy = IndexPolicy.Key;
-        } else if (keySize >= ParallelConfig.SPARSE_KEY_SIZE) {
-            policy = IndexPolicy.Sparse;
-        } else {
-            policy = IndexPolicy.Dense;
-        }
-        return policy;
-    }
-
-    public static void buildSortIndices() {
+    public static void buildSortIndices(DbInfo dbInfo) throws Exception {
         System.out.println("Build sorted indices ...");
         long startMillis = System.currentTimeMillis();
-        Map<String, String> tableToAlias = new HashMap<>();
-        tableToAlias.put("orders", "orders");
-        tableToAlias.put("lineitem", "lineitem");
-        tableToAlias.put("supplier", "supplier");
-        tableToAlias.put("nation", "nation");
-        tableToAlias.put("partsupp", "partsupp");
-        tableToAlias.put("customer", "customer");
+        BaseTrie.orderCache = new HashMap<>();
 
-        int o_card = CatalogManager.getCardinality("orders");
-        ColumnRef o_column = new ColumnRef("orders", "o_orderkey");
-        buildSortIndices(Collections.singletonList(o_column), o_card, tableToAlias);
 
-        int l_card = CatalogManager.getCardinality("lineitem");
-        ColumnRef l_column1 = new ColumnRef("lineitem", "l_suppkey");
-        ColumnRef l_column2 = new ColumnRef("lineitem", "l_partkey");
-        ColumnRef l_column3 = new ColumnRef("lineitem", "l_orderkey");
 
-        buildSortIndices(Collections.singletonList(l_column2), l_card, tableToAlias);
-        buildSortIndices(Arrays.asList(l_column1, l_column2, l_column3), l_card, tableToAlias);
-        buildSortIndices(Arrays.asList(l_column1, l_column3, l_column2), l_card, tableToAlias);
-        buildSortIndices(Arrays.asList(l_column2, l_column1, l_column3), l_card, tableToAlias);
-        buildSortIndices(Arrays.asList(l_column2, l_column3, l_column1), l_card, tableToAlias);
-        buildSortIndices(Arrays.asList(l_column3, l_column1, l_column2), l_card, tableToAlias);
-        buildSortIndices(Arrays.asList(l_column3, l_column2, l_column1), l_card, tableToAlias);
+        //  // TEst1数据
 
-        buildSortIndices(Arrays.asList(l_column1, l_column3), l_card, tableToAlias);
-        buildSortIndices(Arrays.asList(l_column3, l_column1), l_card, tableToAlias);
+        // // r表
+        // int r_card = CatalogManager.getCardinality("r");
+        // ColumnRef columnRef1 = new ColumnRef("r", "a");
+        // buildSortIndices(Arrays.asList(columnRef1), r_card);
+        // // s表
+        // int s_card = CatalogManager.getCardinality("s");
+        // ColumnRef columnRef2 = new ColumnRef("s", "a");
+        // buildSortIndices(Arrays.asList(columnRef2), s_card);
+        // // t表
+        // int t_card = CatalogManager.getCardinality("t");
+        // ColumnRef columnRef3 = new ColumnRef("t", "a");
+        // buildSortIndices(Arrays.asList(columnRef3), t_card);
+        // // u表
+        // int u_card = CatalogManager.getCardinality("u");
+        // ColumnRef columnRef4 = new ColumnRef("u", "b");
+        // buildSortIndices(Arrays.asList(columnRef4), u_card);
 
-        int ps_card = CatalogManager.getCardinality("partsupp");
-        ColumnRef ps_column1 = new ColumnRef("partsupp", "ps_suppkey");
-        ColumnRef ps_column2 = new ColumnRef("partsupp", "ps_partkey");
-        buildSortIndices(Collections.singletonList(ps_column1), ps_card, tableToAlias);
-        buildSortIndices(Arrays.asList(ps_column1, ps_column2), ps_card, tableToAlias);
-        buildSortIndices(Arrays.asList(ps_column2, ps_column1), ps_card, tableToAlias);
 
-        int s_card = CatalogManager.getCardinality("supplier");
-        ColumnRef s_column1 = new ColumnRef("supplier", "s_nationkey");
-        ColumnRef s_column2 = new ColumnRef("supplier", "s_suppkey");
-        buildSortIndices(Collections.singletonList(s_column1), s_card, tableToAlias);
-        buildSortIndices(Arrays.asList(s_column1, s_column2), s_card, tableToAlias);
-        buildSortIndices(Arrays.asList(s_column2, s_column1), s_card, tableToAlias);
 
-        int n_card = CatalogManager.getCardinality("nation");
-        ColumnRef n_column = new ColumnRef("nation", "n_nationkey");
-        buildSortIndices(Collections.singletonList(n_column), n_card, tableToAlias);
 
-        int c_card = CatalogManager.getCardinality("customer");
-        ColumnRef c_column1 = new ColumnRef("customer", "c_nationkey");
-        ColumnRef c_column2 = new ColumnRef("customer", "c_custkey");
-        buildSortIndices(Arrays.asList(c_column1, c_column2), c_card, tableToAlias);
-        buildSortIndices(Arrays.asList(c_column2, c_column1), c_card, tableToAlias);
+
+
+        // cast_info
+        int ci_card = CatalogManager.getCardinality("cast_info");
+        ColumnRef columnRef1 = new ColumnRef("cast_info", "person_id");
+        ColumnRef columnRef2 = new ColumnRef("cast_info", "movie_id");
+        ColumnRef columnRef3 = new ColumnRef("cast_info", "person_role_id");
+        ColumnRef columnRef4 = new ColumnRef("cast_info", "role_id");
+        // build following sorted indices on cast_info      14种
+        buildSortIndices(Arrays.asList(columnRef1, columnRef2), ci_card);
+        buildSortIndices(Arrays.asList(columnRef2, columnRef1), ci_card);
+        buildSortIndices(Arrays.asList(columnRef1, columnRef2, columnRef4), ci_card);
+        buildSortIndices(Arrays.asList(columnRef1, columnRef4, columnRef2), ci_card);
+        buildSortIndices(Arrays.asList(columnRef2, columnRef1, columnRef4), ci_card);
+        buildSortIndices(Arrays.asList(columnRef2, columnRef4, columnRef1), ci_card);
+        buildSortIndices(Arrays.asList(columnRef4, columnRef1, columnRef2), ci_card);
+        buildSortIndices(Arrays.asList(columnRef4, columnRef2, columnRef1), ci_card);
+        buildSortIndices(Arrays.asList(columnRef1, columnRef2, columnRef3), ci_card);
+        buildSortIndices(Arrays.asList(columnRef1, columnRef3, columnRef2), ci_card);
+        buildSortIndices(Arrays.asList(columnRef2, columnRef1, columnRef3), ci_card);
+        buildSortIndices(Arrays.asList(columnRef2, columnRef3, columnRef1), ci_card);
+        buildSortIndices(Arrays.asList(columnRef3, columnRef1, columnRef2), ci_card);
+        buildSortIndices(Arrays.asList(columnRef3, columnRef2, columnRef1), ci_card);
+
+        
+        // build following sorted indices on movie_info
+        int mi_card = CatalogManager.getCardinality("movie_info");
+        ColumnRef columnRef5 = new ColumnRef("movie_info", "movie_id");
+        ColumnRef columnRef6 = new ColumnRef("movie_info", "info_type_id");
+        buildSortIndices(Arrays.asList(columnRef5, columnRef6), mi_card);
+        buildSortIndices(Arrays.asList(columnRef6, columnRef5), mi_card);
+
+
+        // build following sorted indices on title
+        int t_card = CatalogManager.getCardinality("title");
+        ColumnRef columnRef7 = new ColumnRef("title", "id");
+        buildSortIndices(Collections.singletonList(columnRef7), t_card);
+
+
+        // build following sorted indices on name
+        int n_card = CatalogManager.getCardinality("name");
+        ColumnRef columnRef8 = new ColumnRef("name", "id");
+        buildSortIndices(Collections.singletonList(columnRef8), n_card);
+
+
+        // build following sorted indices on movie_info_idx
+        int mii_card = CatalogManager.getCardinality("movie_info_idx");
+        ColumnRef columnRef9 = new ColumnRef("movie_info_idx", "movie_id");
+        ColumnRef columnRef10 = new ColumnRef("movie_info_idx", "info_type_id");
+        buildSortIndices(Arrays.asList(columnRef9, columnRef10), mii_card);
+        buildSortIndices(Arrays.asList(columnRef10, columnRef9), mii_card);
+
+        int mc_card = CatalogManager.getCardinality("movie_companies");
+        ColumnRef columnRef11 = new ColumnRef("movie_companies", "company_type_id");
+        buildSortIndices(Arrays.asList(columnRef11), mc_card);
+
+        ColumnRef columnRef12 = new ColumnRef("movie_companies", "company_id");
+        buildSortIndices(Arrays.asList(columnRef12), mc_card);
+
+        int mk_card = CatalogManager.getCardinality("movie_keyword");
+        ColumnRef columnRef13 = new ColumnRef("movie_keyword", "keyword_id");
+        buildSortIndices(Arrays.asList(columnRef13), mk_card);
 
         long totalMillis = System.currentTimeMillis() - startMillis;
-        System.out.println("Sort Indexing took " + totalMillis + " ms.");
+        System.out.println("Indexing took " + totalMillis + " ms.");
     }
 
-    public static void buildSortIndices(List<ColumnRef> columnRefs, int card, Map<String, String> tableToAlias) {
+    public static void buildSortIndices(List<ColumnRef> columnRefs, int card) {
         List<ColumnData> trieCols = new ArrayList<>();
         List<ColumnRef> trieRefs = new ArrayList<>();
         for (ColumnRef columnRef : columnRefs) {
             try {
                 trieCols.add(BufferManager.getData(columnRef));
-                trieRefs.add(new ColumnRef(tableToAlias.get(columnRef.aliasName), columnRef.columnName));
+                trieRefs.add(new ColumnRef(columnRef.aliasName, columnRef.columnName));
             } catch (Exception e) {
                 System.err.println("Error sort indexing " + columnRef);
                 e.printStackTrace();
             }
         }
-        int[] tupleOrder = IntStream.range(0, card).boxed().parallel().sorted(new Comparator<Integer>() {
-            @Override
-            public int compare(Integer row1, Integer row2) {
-                for (ColumnData colData : trieCols) {
-                    int cmp = colData.compareRows(row1, row2);
-                    if (cmp == 2) {
-                        boolean row1null = colData.isNull.get(row1);
-                        boolean row2null = colData.isNull.get(row2);
-                        if (row1null && !row2null) {
-                            return -1;
-                        } else if (!row1null && row2null) {
-                            return 1;
-                        }
-                    } else if (cmp != 0) {
-                        return cmp;
+        Integer[] indices = IntStream.range(0, card).boxed().toArray(Integer[]::new);
+        Arrays.parallelSort(indices, (row1, row2) -> {
+            for (int i = 0; i < trieCols.size(); i++) {
+                ColumnData colData = trieCols.get(i);
+                int cmp = colData.compareRows(row1, row2);
+                if (cmp == 2) {
+                    boolean row1null = colData.isNull.get(row1);
+                    boolean row2null = colData.isNull.get(row2);
+                    if (row1null != row2null) {
+                        return row1null ? -1 : 1;
                     }
+                } else if (cmp != 0) {
+                    return cmp;
                 }
-                return 0;
             }
-        }).mapToInt(i -> i).toArray();
-        BaseTrie.orderCache.put(trieRefs, tupleOrder);
+            return 0;
+        });
+        int[] tupleOrder = Arrays.stream(indices).mapToInt(Integer::intValue).toArray();
+
+        System.out.println("add OrderCache: " + trieRefs);
+        for (int i = 0; i < trieRefs.size(); i++) {
+            List<ColumnRef> prefix = trieRefs.subList(0, i + 1);
+            BaseTrie.orderCache.put(new ArrayList<>(prefix), tupleOrder);
+        }
     }
+
 }

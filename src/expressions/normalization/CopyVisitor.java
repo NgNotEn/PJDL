@@ -71,7 +71,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 
-import expressions.SkinnerVisitor;
+import expressions.Visitor;
 import net.sf.jsqlparser.expression.BinaryExpression;
 
 /**
@@ -82,7 +82,7 @@ import net.sf.jsqlparser.expression.BinaryExpression;
  * @author immanueltrummer
  *
  */
-public class CopyVisitor extends SkinnerVisitor {
+public class CopyVisitor extends Visitor {
 	/**
 	 * Copied expression fragments - finally contains copied expression.
 	 */
@@ -229,11 +229,7 @@ public class CopyVisitor extends SkinnerVisitor {
 		arg0.getRightExpression().accept(this);
 		Expression op2 = exprStack.pop();
 		Expression op1 = exprStack.pop();
-		AndExpression newAnd = new AndExpression(op1, op2);
-		if (arg0.isNot()) {
-			newAnd.setNot();
-		}
-		exprStack.push(newAnd);
+		exprStack.push(new AndExpression(op1, op2));
 	}
 
 	@Override
@@ -261,27 +257,18 @@ public class CopyVisitor extends SkinnerVisitor {
 	public void visit(EqualsTo arg0) {
 		EqualsTo newEquals = new EqualsTo();
 		treatBinary(arg0, newEquals);
-		if (arg0.isNot()) {
-			newEquals.setNot();
-		}
 	}
 
 	@Override
 	public void visit(GreaterThan arg0) {
 		GreaterThan newGt = new GreaterThan();
 		treatBinary(arg0, newGt);
-		if (arg0.isNot()) {
-			newGt.setNot();
-		}
 	}
 
 	@Override
 	public void visit(GreaterThanEquals arg0) {
 		GreaterThanEquals newGte = new GreaterThanEquals();
 		treatBinary(arg0, newGte);
-		if (arg0.isNot()) {
-			newGte.setNot();
-		}
 	}
 	/**
 	 * We transform an in expression into nested OR expressions.
@@ -345,27 +332,18 @@ public class CopyVisitor extends SkinnerVisitor {
 	public void visit(MinorThan arg0) {
 		MinorThan newMt = new MinorThan();
 		treatBinary(arg0, newMt);
-		if (arg0.isNot()) {
-			newMt.setNot();
-		}
 	}
 
 	@Override
 	public void visit(MinorThanEquals arg0) {
 		MinorThanEquals newMte = new MinorThanEquals();
 		treatBinary(arg0, newMte);
-		if (arg0.isNot()) {
-			newMte.setNot();
-		}
 	}
 
 	@Override
 	public void visit(NotEqualsTo arg0) {
 		NotEqualsTo newNe = new NotEqualsTo();
 		treatBinary(arg0, newNe);
-		if (arg0.isNot()) {
-			newNe.setNot();
-		}
 	}
 
 	@Override

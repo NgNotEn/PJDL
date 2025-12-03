@@ -4,7 +4,6 @@ import buffer.BufferManager;
 import data.Dictionary;
 import indexing.Index;
 import indexing.IntIndex;
-import joining.parallel.indexing.IntPartitionIndex;
 import net.sf.jsqlparser.expression.AllComparisonExpression;
 import net.sf.jsqlparser.expression.AnalyticExpression;
 import net.sf.jsqlparser.expression.AnyComparisonExpression;
@@ -51,14 +50,25 @@ import net.sf.jsqlparser.expression.operators.arithmetic.Multiplication;
 import net.sf.jsqlparser.expression.operators.arithmetic.Subtraction;
 import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
 import net.sf.jsqlparser.expression.operators.conditional.OrExpression;
-import net.sf.jsqlparser.expression.operators.relational.*;
+import net.sf.jsqlparser.expression.operators.relational.Between;
+import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
+import net.sf.jsqlparser.expression.operators.relational.ExistsExpression;
+import net.sf.jsqlparser.expression.operators.relational.GreaterThan;
+import net.sf.jsqlparser.expression.operators.relational.GreaterThanEquals;
+import net.sf.jsqlparser.expression.operators.relational.InExpression;
+import net.sf.jsqlparser.expression.operators.relational.IsNullExpression;
+import net.sf.jsqlparser.expression.operators.relational.JsonOperator;
+import net.sf.jsqlparser.expression.operators.relational.LikeExpression;
+import net.sf.jsqlparser.expression.operators.relational.Matches;
+import net.sf.jsqlparser.expression.operators.relational.MinorThan;
+import net.sf.jsqlparser.expression.operators.relational.MinorThanEquals;
+import net.sf.jsqlparser.expression.operators.relational.NotEqualsTo;
+import net.sf.jsqlparser.expression.operators.relational.RegExpMatchOperator;
+import net.sf.jsqlparser.expression.operators.relational.RegExpMySQLOperator;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.statement.select.SubSelect;
 import query.ColumnRef;
 import query.QueryInfo;
-
-import java.util.ArrayDeque;
-import java.util.Deque;
 
 /**
  * Verifies whether a unary predicate can be
@@ -77,15 +87,6 @@ public class IndexTest implements ExpressionVisitor {
 	 * Whether we can use an index to evaluate input predicate.
 	 */
 	public boolean canUseIndex = true;
-	/**
-	 * Whether the expression is constant or constant expression.
-	 */
-	public Deque<Boolean> constantQueue =
-			new ArrayDeque<>();
-	/**
-	 * Whether the index is sorted.
-	 */
-	public boolean sorted = false;
 	/**
 	 * Initialize index test for given query.
 	 * 
@@ -168,50 +169,22 @@ public class IndexTest implements ExpressionVisitor {
 
 	@Override
 	public void visit(Addition addition) {
-		addition.getLeftExpression().accept(this);
-		addition.getRightExpression().accept(this);
-		if (constantQueue.size() == 2) {
-			constantQueue.pop();
-		}
-		else {
-			constantQueue.clear();
-		}
+		canUseIndex = false;
 	}
 
 	@Override
 	public void visit(Division division) {
-		division.getLeftExpression().accept(this);
-		division.getRightExpression().accept(this);
-		if (constantQueue.size() == 2) {
-			constantQueue.pop();
-		}
-		else {
-			constantQueue.clear();
-		}
+		canUseIndex = false;
 	}
 
 	@Override
 	public void visit(Multiplication multiplication) {
-		multiplication.getLeftExpression().accept(this);
-		multiplication.getRightExpression().accept(this);
-		if (constantQueue.size() == 2) {
-			constantQueue.pop();
-		}
-		else {
-			constantQueue.clear();
-		}
+		canUseIndex = false;
 	}
 
 	@Override
 	public void visit(Subtraction subtraction) {
-		subtraction.getLeftExpression().accept(this);
-		subtraction.getRightExpression().accept(this);
-		if (constantQueue.size() == 2) {
-			constantQueue.pop();
-		}
-		else {
-			constantQueue.clear();
-		}
+		canUseIndex = false;
 	}
 
 	@Override
@@ -237,7 +210,7 @@ public class IndexTest implements ExpressionVisitor {
 		Expression right = equalsTo.getRightExpression();
 		left.accept(this);
 		right.accept(this);
-		boolean haveConstant = left instanceof LongValue ||
+		boolean haveConstant = left instanceof LongValue || 
 				left instanceof StringValue ||
 				right instanceof LongValue ||
 				right instanceof StringValue;
@@ -250,12 +223,12 @@ public class IndexTest implements ExpressionVisitor {
 
 	@Override
 	public void visit(GreaterThan greaterThan) {
-		compareExpression(greaterThan);
+		canUseIndex = false;
 	}
 
 	@Override
 	public void visit(GreaterThanEquals greaterThanEquals) {
-		compareExpression(greaterThanEquals);
+		canUseIndex = false;
 	}
 
 	@Override
@@ -276,26 +249,12 @@ public class IndexTest implements ExpressionVisitor {
 
 	@Override
 	public void visit(MinorThan minorThan) {
-		compareExpression(minorThan);
-	}
-
-	public void compareExpression(ComparisonOperator comparisonOperator) {
-		Expression left = comparisonOperator.getLeftExpression();
-		Expression right = comparisonOperator.getRightExpression();
-		left.accept(this);
-		right.accept(this);
-		sorted = false;
-		boolean haveConstant = constantQueue.size() > 0;
-		boolean haveColumn = left instanceof Column ||
-				right instanceof Column;
-		if (!haveConstant || !haveColumn) {
-			canUseIndex = false;
-		}
+		canUseIndex = false;
 	}
 
 	@Override
 	public void visit(MinorThanEquals minorThanEquals) {
-		compareExpression(minorThanEquals);
+		canUseIndex = false;
 	}
 
 	@Override
@@ -313,7 +272,7 @@ public class IndexTest implements ExpressionVisitor {
 		// Check that index of right type is available
 		Index index = BufferManager.colToIndex.get(colRef);
 		if (index != null) {
-			if (!(index instanceof IntIndex) && !(index instanceof IntPartitionIndex)) {
+			if (!(index instanceof IntIndex)) {
 				// Wrong index type
 				canUseIndex = false;
 			}
@@ -380,14 +339,7 @@ public class IndexTest implements ExpressionVisitor {
 
 	@Override
 	public void visit(CastExpression cast) {
-		Expression left = cast.getLeftExpression();
-		String castType = cast.getType().getDataType();
-		if (castType.toLowerCase().equals("bool")) {
-			canUseIndex = left instanceof LongValue && ((LongValue) left).getValue() == 0;
-		}
-		else {
-			canUseIndex = false;
-		}
+		canUseIndex = false;
 	}
 
 	@Override
@@ -412,8 +364,7 @@ public class IndexTest implements ExpressionVisitor {
 
 	@Override
 	public void visit(IntervalExpression iexpr) {
-		canUseIndex = true;
-		constantQueue.push(true);
+		canUseIndex = false;
 	}
 
 	@Override
@@ -478,8 +429,7 @@ public class IndexTest implements ExpressionVisitor {
 
 	@Override
 	public void visit(DateTimeLiteralExpression literal) {
-		canUseIndex = true;
-		constantQueue.push(true);
+		canUseIndex = false;
 	}
 
 	@Override

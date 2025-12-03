@@ -58,8 +58,8 @@ public class CatalogManager {
 	 * @return			table cardinality (number of rows)
 	 */
 	public static int getCardinality(String tableName) {
-//		System.out.println(currentStats.tableToStats.keySet());
 		TableStats tableStats = currentStats.tableToStats.get(tableName);
+		// System.out.println()
 		return tableStats.cardinality;
 	}
 	/**

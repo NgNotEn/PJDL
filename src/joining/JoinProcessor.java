@@ -1,32 +1,18 @@
 package joining;
 
-import java.util.AbstractMap;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.Callable;
-
 import buffer.BufferManager;
-import catalog.CatalogManager;
 import data.ColumnData;
-import data.DoubleData;
 import data.IntData;
-import expressions.ExpressionInfo;
-import predicate.NonEquiNode;
+import java.util.*;
+import java.util.concurrent.Callable;
 import preprocessing.Context;
 import query.ColumnRef;
 import query.QueryInfo;
 
 
-public class JoinProcessor implements Callable<List<int[]>>{
+public class JoinProcessor implements Callable<int[]>{
 
+    
     // 生成一个attribute order
     public static List<Set<ColumnRef>> planGenerator(QueryInfo query, Context context) throws Exception {
         BitSet preStatus = new BitSet(query.aliases.length);
@@ -48,14 +34,8 @@ public class JoinProcessor implements Callable<List<int[]>>{
             for (ColumnRef colRef : eqClass) {
                 String table = context.aliasToFiltered.get(colRef.aliasName);
                 ColumnData colData = BufferManager.getData(new ColumnRef(table, colRef.columnName));
-                if(colData instanceof IntData) {
-                    IntData intData = (IntData) colData;
-                    minCardinality = Math.min(minCardinality, intData.cardinality);
-                }
-                else if(colData instanceof DoubleData) {
-                    DoubleData doubleData = (DoubleData) colData;
-                    minCardinality = Math.min(minCardinality, doubleData.cardinality);
-                }
+                IntData intData = (IntData) colData;
+                minCardinality = Math.min(minCardinality, intData.cardinality);
             }
 
             eqClassToMinCardinality.put(eqClass, minCardinality);
@@ -107,6 +87,7 @@ public class JoinProcessor implements Callable<List<int[]>>{
             remaining.add(entry.getKey());  // 初始化剩余等价类列表
         }
 
+        
 
         // 选择第一个等价类（分数最高的）
         if (!remaining.isEmpty()) {
@@ -117,6 +98,8 @@ public class JoinProcessor implements Callable<List<int[]>>{
                 preStatus.set(s2i.get(colRef.aliasName));
             }
         }
+
+
 
 
         // 按连通性和出现次数优先级选择后续等价类   ​​强制确保每一步连接都发生在一个新等价类和已有表集合之间​​
@@ -205,141 +188,64 @@ public class JoinProcessor implements Callable<List<int[]>>{
         return plan;
     }
 
+    
 
 
-
-    /*=========================================连接===========================================*/ 
+    // 连接入口
     public static TrieManager manager;
     static QueryInfo query;
     static Context context;
     static List<Set<ColumnRef>> varOrder;
+    static AggregateData[] aggregateDatas;
+    static Map<Integer, List<Integer>> aggregateInfo;
 
     int threadId;
-    
-    JoinProcessor(int threadId, QueryInfo query, Context context, List<Set<ColumnRef>> varOrder) {
+    public JoinProcessor(int threadId) {
         this.threadId = threadId;
-        static_init(query, context, varOrder);
     }
 
-    static void static_init(QueryInfo _query, Context _context, List<Set<ColumnRef>> _varOrder) {
+    public static void static_init(QueryInfo _query, Context _context, List<Set<ColumnRef>> _varOrder, AggregateData[] _aggregateDatas, Map<Integer, List<Integer>> _aggregateInfo) {
         query = _query;
         context = _context;
         varOrder = _varOrder;
+        aggregateDatas = _aggregateDatas;
+        aggregateInfo = _aggregateInfo;
     }
 
+
+
+
+
     @Override
-    public List<int[]> call() throws Exception {
-        List<int[]> joinResults = new ArrayList<>();
-        while(true) {
-            Trie[] tries =  manager.next_tries();
-            if(tries == null) break;
+    public int[] call() throws Exception {
+
+        int[] joinResult = new int[this.aggregateDatas.length];
+        Arrays.fill(joinResult, -1);
+        while (true) {
+            Trie[] tries = null;
+            synchronized(manager){
+                if(!manager.has_next()) break;
+                tries = manager.next_tries();  
+            }
+            if(tries == null) continue;
             LeapFrogTrieJoin lftj = new LeapFrogTrieJoin(tries);
             for (Set<ColumnRef> var : varOrder) {
                 lftj.executeJoin(var);
             }
-            joinResults.addAll(handleNonEquiPredicates(lftj.genResultTuple()));
-        }
-
-        return joinResults;
-    }
-
-
-    public List<int[]> handleNonEquiPredicates(List<int[]> currentResult) {
-        List<int[]> joinResult = new ArrayList<>();
-        if (currentResult.size() > 0) {
-            // we have non equality predicates here.
-            if (query.nonEquiJoinPreds.size() > 0) {
-                // number of non equality join predicates
-                int nrNonEquivalentPredict = query.nonEquiJoinNodes.size();
-                List<ExpressionInfo> nonEquiExpressions = query.nonEquiJoinPreds;
-                // map non equality predicate id to table id
-                HashMap<Integer, Integer> nonEquiTablesToAliasIndex = new HashMap<>();
-                HashMap<Integer, Integer> nonEquiCards = new HashMap<>();
-                Set<Integer> availableTables = new HashSet<>();
-
-                for (int tid = 0; tid < query.nrJoined; tid++) {
-                    availableTables.add(tid);
-                    for (int eid = 0; eid < nrNonEquivalentPredict; eid++) {
-                        if (!nonEquiTablesToAliasIndex.containsKey(eid) && availableTables.containsAll(
-                                nonEquiExpressions.get(eid).aliasIdxMentioned)) {
-                            nonEquiTablesToAliasIndex.put(eid, tid);
-                            String alias = query.aliases[tid];
-                            String table = context.aliasToFiltered.get(alias);
-                            nonEquiCards.put(eid, CatalogManager.getCardinality(table));
-                        }
-                    }
-                }
-
-                Set<Integer> validateRowIds = new HashSet<>(currentResult.size());
-                for (int rid = 0; rid < currentResult.size(); rid++) {
-                    validateRowIds.add(rid);
-                }
-
-                for (int nonEquiPredictId = 0; nonEquiPredictId < nrNonEquivalentPredict; nonEquiPredictId++) {
-                    int processTableId = nonEquiTablesToAliasIndex.get(nonEquiPredictId);
-                    int cardinality = nonEquiCards.get(nonEquiPredictId);
-                    NonEquiNode nonEquiNode = query.nonEquiJoinNodes.get(nonEquiPredictId);
-                    Set<Integer> currentValidateRowIds = new HashSet<>();
-                    for (int rid : validateRowIds) {
-                        int[] result = currentResult.get(rid);
-                        if (result[processTableId] == -1) {
-                            // non equality condition is not mentioned before, should be exist or non-exist in subqueries
-                            // Create a copy to avoid modifying the original array during evaluation
-                            int[] testResult = Arrays.copyOf(result, result.length);
-                            testResult[processTableId] = 0;
-                            while (testResult[processTableId] < cardinality) {
-                                if (nonEquiNode.evaluate(testResult, processTableId, cardinality)) {
-                                    // satisfy condition - update original with found value
-                                    result[processTableId] = testResult[processTableId];
-                                    currentValidateRowIds.add(rid);
-                                    break;
-                                } else {
-                                    testResult[processTableId]++;
-                                }
-                            }
-                        } else {
-                            // test directly
-                            if (nonEquiNode.evaluate(result, processTableId, cardinality)) {
-                                // satisfy condition
-                                currentValidateRowIds.add(rid);
-                            }
-                        }
-                    }
-                    validateRowIds = currentValidateRowIds;
-                }
-
-                for (int validateRowId : validateRowIds) {
-                    joinResult.add(currentResult.get(validateRowId));
-                }
-            } else {
-                // apply cartesian
-                boolean applyCartesianProduct = false;
-                int cartesianProductTableIndex = -1;
-                for (int tid = 0; tid < currentResult.get(0).length; tid++) {
-                    int rid = currentResult.get(0)[tid];
-                    if (rid == -1) {
-                        applyCartesianProduct = true;
-                        cartesianProductTableIndex = tid;
-                        break;
-                    }
-                }
-                if (applyCartesianProduct) {
-                    // add more results here
-                    String alias = query.aliases[cartesianProductTableIndex];
-                    String table = context.aliasToFiltered.get(alias);
-                    int card = CatalogManager.getCardinality(table);
-                    for (int[] result : currentResult) {
-                        for (int i = 0; i < card; i++) {
-                            int[] newResult = Arrays.copyOf(result, result.length);
-                            newResult[cartesianProductTableIndex] = i;
-                            joinResult.add(newResult);
-                        }
-                    }
-                } else {
-                    joinResult.addAll(currentResult);
-                }
-            }
+            refresh_result(joinResult, lftj.genResultTuple());
         }
         return joinResult;
+    }
+
+    public static void refresh_result(int[] joinResult, int[] queryResult) {
+        for (int i = 0; i < queryResult.length; i++) {
+            if (joinResult[i] != -1 && queryResult[i] != -1) {
+                if ((queryResult[i] < joinResult[i] && aggregateDatas[i].isMin)
+                        || (queryResult[i] > joinResult[i] && !aggregateDatas[i].isMin))
+                    joinResult[i] = queryResult[i];
+            } else if (queryResult[i] != -1) {
+                joinResult[i] = queryResult[i];
+            }
+        }
     }
 }
