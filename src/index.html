@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grouped Join DB</title>
+    <style>
+        :root {
+            --primary: #4361ee;
+            --primary-light: #4895ef;
+            --primary-dark: #3a56d4;
+            --secondary: #7209b7;
+            --accent: #4cc9f0;
+            --success: #4caf50;
+            --warning: #ff9800;
+            --error: #f44336;
+            --light: #f8f9fa;
+            --light-gray: #e9ecef;
+            --medium-gray: #adb5bd;
+            --dark: #212529;
+            --border: #dee2e6;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+            --radius: 8px;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: var(--dark);
+            line-height: 1.6;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            background: white;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            animation: fadeIn 0.5s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .header {
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            color: white;
+            padding: 25px 30px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .header::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" opacity="0.05"><path d="M0 0h100v100H0z" fill="none"/><path d="M20 20h60v60H20z" stroke="white" stroke-width="2" fill="none"/></svg>');
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            position: relative;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+            position: relative;
+        }
+        
+        .content {
+            display: flex;
+            min-height: 600px;
+        }
+        
+        .query-panel {
+            flex: 1;
+            padding: 30px;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            background: var(--light);
+        }
+        
+        .query-input-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .query-label {
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--dark);
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .query-label::before {
+            content: "📊";
+            margin-right: 8px;
+        }
+        
+        .execute-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: var(--radius);
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            align-self: flex-start;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .execute-btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+        
+        .execute-btn:active {
+            transform: translateY(0);
+        }
+        
+        .execute-btn::before {
+            content: "▶";
+            font-size: 14px;
+        }
+        
+        .query-input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            font-family: 'Fira Code', 'Courier New', monospace;
+            font-size: 14px;
+            resize: none;
+            transition: var(--transition);
+            line-height: 1.5;
+            background: white;
+            min-height: 200px;
+        }
+        
+        .query-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2);
+        }
+        
+        .results-panel {
+            flex: 1;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            background: white;
+        }
+        
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .results-info {
+            font-weight: 600;
+            color: var(--dark);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .results-info::before {
+            content: "📈";
+        }
+        
+        .query-stats {
+            color: var(--medium-gray);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .query-stats::before {
+            content: "⏱️";
+        }
+        
+        .results-container {
+            flex: 1;
+            border-radius: var(--radius);
+            border: 2px solid var(--border);
+            background: white;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .results-content {
+            flex: 1;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .table-container {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            table-layout: fixed;
+        }
+        
+        .results-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .results-table th {
+            background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+            padding: 15px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--dark);
+            border-bottom: 2px solid var(--border);
+            position: relative;
+        }
+        
+        .results-table th:not(:last-child)::after {
+            content: "";
+            position: absolute;
+            right: 0;
+            top: 15%;
+            height: 70%;
+            width: 1px;
+            background: var(--border);
+        }
+        
+        .results-table td {
+            padding: 12px;
+            border-bottom: 1px solid var(--light-gray);
+            transition: var(--transition);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .results-table tbody tr {
+            transition: var(--transition);
+        }
+        
+        .results-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .results-table tbody tr:hover td {
+            background: transparent;
+        }
+        
+        .results-table tbody tr:nth-child(even) {
+            background: #fdfdfd;
+        }
+        
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            padding: 40px;
+            text-align: center;
+            color: var(--medium-gray);
+        }
+        
+        .empty-icon {
+            font-size: 64px;
+            margin-bottom: 15px;
+            opacity: 0.7;
+        }
+        
+        .empty-state h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: var(--dark);
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            display: none;
+            border-radius: var(--radius);
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(67, 97, 238, 0.2);
+            border-radius: 50%;
+            border-top-color: var(--primary);
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            margin-top: 15px;
+            font-size: 16px;
+            color: var(--dark);
+            font-weight: 500;
+        }
+        
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .error-message {
+            background: #ffebee;
+            border-left: 4px solid var(--error);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin: 20px;
+            color: var(--error);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideIn 0.3s ease;
+        }
+        
+        .error-message::before {
+            content: "⚠️";
+            font-size: 20px;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        .success-message {
+            background: #e8f5e9;
+            border-left: 4px solid var(--success);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin: 20px;
+            color: #2e7d32;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: slideIn 0.3s ease;
+        }
+        
+        .success-message::before {
+            content: "✅";
+            font-size: 20px;
+        }
+        
+        .cell-content {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .cell-content:hover {
+            overflow: visible;
+            white-space: normal;
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 5px;
+            border-radius: 4px;
+            position: relative;
+            z-index: 5;
+        }
+        
+        /* 简化分页控件样式 */
+        .pagination-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            border-top: 1px solid var(--border);
+            background: #f8f9fa;
+            font-size: 13px;
+        }
+        
+        .pagination-info {
+            color: var(--medium-gray);
+        }
+        
+        .pagination-buttons {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .page-btn {
+            background: white;
+            border: 1px solid var(--border);
+            color: var(--dark);
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 13px;
+        }
+        
+        .page-btn:hover:not(:disabled) {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .page-numbers {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+        
+        .page-number {
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 13px;
+        }
+        
+        .page-number:hover {
+            background: var(--light-gray);
+        }
+        
+        .page-number.active {
+            background: var(--primary);
+            color: white;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 900px) {
+            .content {
+                flex-direction: column;
+            }
+            
+            .query-panel, .results-panel {
+                width: 100%;
+            }
+            
+            .query-panel {
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+                min-height: 300px;
+            }
+            
+            .query-input {
+                min-height: 200px;
+            }
+            
+            .pagination-controls {
+                flex-direction: column;
+                gap: 10px;
+                align-items: stretch;
+            }
+            
+            .pagination-buttons {
+                justify-content: center;
+            }
+        }
+        
+        .shortcuts {
+            margin-top: 15px;
+            font-size: 13px;
+            color: var(--medium-gray);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .shortcuts::before {
+            content: "💡";
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Grouped Join DB</h1>
+            <p>For TPC-H Dataset</p>
+        </div>
+        
+        <div class="content">
+            <div class="query-panel">
+                <div class="query-input-container">
+                    <label class="query-label" for="queryInput">SQL Query</label>
+                    <button id="executeBtn" class="execute-btn">Execute Query</button>
+                    <textarea id="queryInput" class="query-input"></textarea>
+                    <div class="shortcuts">Press Ctrl+Enter to execute query</div>
+                </div>
+            </div>
+            
+            <div class="results-panel">
+                <div class="results-header">
+                    <div class="results-info" id="resultsCount">Results: 0 rows</div>
+                    <div class="query-stats" id="queryTime">Time: 0ms</div>
+                </div>
+                
+                <div class="results-container" id="resultsContainer">
+                    <div class="results-content" id="resultsContent">
+                        <div class="empty-state">
+                            <div class="empty-icon">📊</div>
+                            <h3>No results yet</h3>
+                            <p>Enter a SQL query and click "Execute Query" to see results</p>
+                        </div>
+                    </div>
+                    
+                    <div class="loading-overlay" id="loadingOverlay">
+                        <div class="loading-container">
+                            <div class="spinner"></div>
+                            <div class="loading-text" id="loadingText">Processing your query...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM元素
+        const queryInput = document.getElementById('queryInput');
+        const executeBtn = document.getElementById('executeBtn');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const resultsContent = document.getElementById('resultsContent');
+        const resultsCount = document.getElementById('resultsCount');
+        const queryTime = document.getElementById('queryTime');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingText = document.getElementById('loadingText');
+        
+        // 分页相关变量 - 固定为20个元组
+        let currentPage = 1;
+        const rowsPerPage = 20; // 固定为20
+        let allData = [];
+        let currentData = [];
+        
+        // 显示加载状态
+        function showLoading(message = "Processing your query...") {
+            loadingText.textContent = message;
+            loadingOverlay.style.display = 'flex';
+        }
+        
+        // 隐藏加载状态
+        function hideLoading() {
+            loadingOverlay.style.display = 'none';
+        }
+        
+        // 执行查询
+        async function executeQuery() {
+            const sql = queryInput.value.trim();
+            if (!sql) {
+                alert('Please enter a SQL query');
+                return;
+            }
+            
+            showLoading();
+            const startTime = Date.now();
+            
+            try {
+                // 调用后端API
+                const response = await fetch(`http://localhost:8080/query?sql=${encodeURIComponent(sql)}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const elapsedTime = Date.now() - startTime;
+                
+                // 显示结果
+                displayResults(data, elapsedTime);
+                
+            } catch (error) {
+                console.error('Query failed:', error);
+                showMessage(`Query failed: ${error.message}`, 'error');
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        // 显示消息
+        function showMessage(message, type = 'info') {
+            const messageEl = document.createElement('div');
+            messageEl.className = type === 'error' ? 'error-message' : 'success-message';
+            messageEl.textContent = message;
+            
+            resultsContent.innerHTML = '';
+            resultsContent.appendChild(messageEl);
+            
+            // 更新统计信息
+            resultsCount.textContent = `Results: Error`;
+            queryTime.textContent = `Time: Error`;
+            
+            // 重置分页数据
+            allData = [];
+            currentData = [];
+            currentPage = 1;
+        }
+        
+        // 显示查询结果
+        function displayResults(data, elapsedTime) {
+            // 检查数据格式
+            if (!data || typeof data !== 'object') {
+                showMessage('Invalid response format from server', 'error');
+                return;
+            }
+            
+            if (data.error) {
+                showMessage(`Server error: ${data.error}`, 'error');
+                return;
+            }
+            
+            if (!data.headers || !data.data) {
+                showMessage('Response missing headers or data array', 'error');
+                return;
+            }
+            
+            const totalRows = data.data.length;
+            
+            // 更新统计信息
+            resultsCount.textContent = `Results: ${totalRows} row${totalRows !== 1 ? 's' : ''}`;
+            queryTime.textContent = `Time: ${elapsedTime}ms`;
+            
+            // 存储所有数据
+            allData = data;
+            currentPage = 1;
+            
+            // 如果没有数据
+            if (totalRows === 0) {
+                resultsContent.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">🔍</div>
+                        <h3>No results found</h3>
+                        <p>Your query executed successfully but returned no results</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // 显示第一页数据
+            showPage(1);
+        }
+        
+        // 显示指定页的数据
+        function showPage(page) {
+            currentPage = page;
+            const startIndex = (page - 1) * rowsPerPage;
+            const endIndex = Math.min(startIndex + rowsPerPage, allData.data.length);
+            
+            // 获取当前页的数据
+            currentData = allData.data.slice(startIndex, endIndex);
+            
+            // 创建结果表格
+            createResultsTable(currentData, allData.headers);
+            
+            // 创建分页控件
+            createPaginationControls(allData.data.length, page);
+        }
+        
+        // 创建结果表格
+        function createResultsTable(data, headers) {
+            const tableContainer = document.createElement('div');
+            tableContainer.className = 'table-container';
+            
+            const table = document.createElement('table');
+            table.className = 'results-table';
+            
+            // 设置列宽
+            const colWidth = 100 / headers.length + '%';
+            table.style.tableLayout = 'fixed';
+            
+            // 创建表头
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            
+            headers.forEach(header => {
+                const th = document.createElement('th');
+                th.textContent = header;
+                th.style.width = colWidth;
+                headerRow.appendChild(th);
+            });
+            
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+            
+            // 创建数据行
+            const tbody = document.createElement('tbody');
+            
+            data.forEach((rowData, index) => {
+                const row = document.createElement('tr');
+                
+                // 添加行动画延迟
+                row.style.animationDelay = `${index * 0.05}s`;
+                row.style.animation = 'fadeIn 0.3s ease forwards';
+                row.style.opacity = '0';
+                
+                rowData.forEach(cellData => {
+                    const td = document.createElement('td');
+                    const cellContent = document.createElement('div');
+                    cellContent.className = 'cell-content';
+                    cellContent.textContent = cellData === null || cellData === undefined ? 'NULL' : cellData;
+                    td.appendChild(cellContent);
+                    row.appendChild(td);
+                });
+                
+                tbody.appendChild(row);
+            });
+            
+            table.appendChild(tbody);
+            tableContainer.appendChild(table);
+            
+            resultsContent.innerHTML = '';
+            resultsContent.appendChild(tableContainer);
+        }
+        
+        // 创建分页控件
+        function createPaginationControls(totalRows, currentPage) {
+            const totalPages = Math.ceil(totalRows / rowsPerPage);
+            
+            // 创建分页控件容器
+            const paginationContainer = document.createElement('div');
+            paginationContainer.className = 'pagination-controls';
+            
+            // 分页信息
+            const startRow = (currentPage - 1) * rowsPerPage + 1;
+            const endRow = Math.min(currentPage * rowsPerPage, totalRows);
+            const paginationInfo = document.createElement('div');
+            paginationInfo.className = 'pagination-info';
+            paginationInfo.textContent = `Showing ${startRow} to ${endRow} of ${totalRows} rows`;
+            
+            // 分页按钮容器
+            const paginationButtons = document.createElement('div');
+            paginationButtons.className = 'pagination-buttons';
+            
+            // 上一页按钮
+            const prevButton = document.createElement('button');
+            prevButton.className = 'page-btn';
+            prevButton.textContent = 'Previous';
+            prevButton.disabled = currentPage === 1;
+            prevButton.addEventListener('click', () => showPage(currentPage - 1));
+            
+            // 下一页按钮
+            const nextButton = document.createElement('button');
+            nextButton.className = 'page-btn';
+            nextButton.textContent = 'Next';
+            nextButton.disabled = currentPage === totalPages;
+            nextButton.addEventListener('click', () => showPage(currentPage + 1));
+            
+            // 页码按钮容器
+            const pageNumbers = document.createElement('div');
+            pageNumbers.className = 'page-numbers';
+            
+            // 生成页码按钮 - 只显示最多5个页码
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(totalPages, startPage + 4);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const pageNumber = document.createElement('span');
+                pageNumber.className = `page-number ${i === currentPage ? 'active' : ''}`;
+                pageNumber.textContent = i;
+                pageNumber.addEventListener('click', () => showPage(i));
+                pageNumbers.appendChild(pageNumber);
+            }
+            
+            // 组装分页控件
+            paginationButtons.appendChild(prevButton);
+            paginationButtons.appendChild(pageNumbers);
+            paginationButtons.appendChild(nextButton);
+            
+            paginationContainer.appendChild(paginationInfo);
+            paginationContainer.appendChild(paginationButtons);
+            
+            // 添加到结果容器
+            resultsContent.appendChild(paginationContainer);
+        }
+        
+        // 初始化
+        function init() {
+            // 绑定执行按钮事件
+            executeBtn.addEventListener('click', executeQuery);
+            
+            // 添加键盘快捷键 (Ctrl+Enter)
+            queryInput.addEventListener('keydown', function(e) {
+                if (e.ctrlKey && e.key === 'Enter') {
+                    executeQuery();
+                }
+            });
+        }
+        
+        // 页面加载完成后初始化
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
