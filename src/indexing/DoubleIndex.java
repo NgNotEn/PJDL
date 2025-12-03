@@ -1,16 +1,12 @@
 package indexing;
 
-import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.map.DoubleIntCursor;
 import com.koloboke.collect.map.DoubleIntMap;
 import com.koloboke.collect.map.hash.HashDoubleIntMaps;
 
 import config.LoggingConfig;
 import data.DoubleData;
-import statistics.JoinStats;
-
-import java.util.Comparator;
-import java.util.stream.IntStream;
+//import statistics.JoinStats;
 
 /**
  * Indexes double values (not necessarily unique).
@@ -99,7 +95,7 @@ public class DoubleIndex extends Index {
 		int firstPos = keyToPositions.getOrDefault(value, -1);
 		// No indexed values?
 		if (firstPos < 0) {
-			JoinStats.nrUniqueIndexLookups += 1;
+//			JoinStats.nrUniqueIndexLookups += 1;
 			return cardinality;
 		}
 		// Can we return first indexed value?
@@ -110,10 +106,10 @@ public class DoubleIndex extends Index {
 		// Get number of indexed values
 		int nrVals = positions[firstPos];
 		// Update index-related statistics
-		JoinStats.nrIndexEntries += nrVals;
-		if (nrVals==1) {
-			JoinStats.nrUniqueIndexLookups += 1;
-		}
+//		JoinStats.nrIndexEntries += nrVals;
+//		if (nrVals==1) {
+//			JoinStats.nrUniqueIndexLookups += 1;
+//		}
 		// Restrict search range via binary search
 		int lowerBound = firstPos + 1;
 		int upperBound = firstPos + nrVals;
@@ -148,17 +144,5 @@ public class DoubleIndex extends Index {
 		} else {
 			return positions[firstPos];
 		}
-	}
-
-	@Override
-	public IntCollection posSet() {
-		return keyToPositions.values();
-	}
-
-	@Override
-	public void sortRows() {
-		sortedRow = IntStream.range(0, cardinality)
-				.boxed().sorted(Comparator.comparingDouble(i -> doubleData.data[i]))
-				.mapToInt(ele -> ele).toArray();
 	}
 }

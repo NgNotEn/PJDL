@@ -1,5 +1,8 @@
 package joining;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
 import java.util.stream.IntStream;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -29,7 +32,7 @@ public class BaseTrie {
     public int[] tupleOrder;
     public static Map<List<ColumnRef>, int[]> orderCache;
 
-    
+    public boolean isTopTrie = false;
 
     public BaseTrie(String alias, int aliasID, QueryInfo query, Context context, List<Set<ColumnRef>> globalVarOrder) throws Exception {
         this.aliasID = aliasID;
@@ -38,15 +41,18 @@ public class BaseTrie {
         trieRefCols = new ArrayList<>();
         List<ColumnRef> order = new ArrayList<>();
         // 初始化实际数据
+        int turns = 0;
         for (Set<ColumnRef> eqClass : globalVarOrder) {
             for (ColumnRef colRef : eqClass) {      
                 if (colRef.aliasName.equals(alias)) {   // 只存储参与了等值连接的列，不存储其他列
+                    if(turns == 0) isTopTrie = true;
                     String colName = colRef.columnName;
                     ColumnRef bufferRef = new ColumnRef(table, colName);
                     order.add(bufferRef);
                     ColumnData colData = BufferManager.getData(bufferRef);
                     trieRefCols.add(colData);
                 }
+                turns++;
             }
         }
         maxLevel = trieRefCols.size();
@@ -56,19 +62,37 @@ public class BaseTrie {
         if(notFiltered && orderCache.containsKey(order)) {
             tupleOrder = orderCache.get(order);
             System.out.println("Cache Hit!");
+            System.out.println(context.aliasToFiltered.get(alias));
         } else {
-            tupleOrder = IntStream.range(0, cardinality).boxed().parallel().sorted(new Comparator<Integer>() {
-                        @Override
-                        public int compare(Integer row1, Integer row2) {
-                            for (ColumnData colData : trieRefCols) {
-                                int cmp = compareColumnValues(colData, row1, row2);
-                                if (cmp != 0) {
-                                    return cmp;
+            
+            CompletableFuture<int[]> future = CompletableFuture.supplyAsync(() -> 
+                IntStream.range(0, cardinality)
+                        .boxed()
+                        .parallel()
+                        .sorted(new Comparator<Integer>() {
+                            @Override
+                            public int compare(Integer row1, Integer row2) {
+                                for (ColumnData colData : trieRefCols) {
+                                    int cmp = compareColumnValues(colData, row1, row2);
+                                    if (cmp != 0) {
+                                        return cmp;
+                                    }
                                 }
+                                return 0;
                             }
-                            return 0;
-                        }
-                    }).mapToInt(i -> i).toArray();
+                        })
+                        .mapToInt(i -> i)
+                        .toArray()
+                        , 
+                ThreadPool.sortService
+            );
+
+            try {
+                tupleOrder = future.get();  // 获取结果
+            } catch (InterruptedException | ExecutionException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("排序任务执行失败", e);
+            }
 
             if(notFiltered) {
                 orderCache.put(order, tupleOrder);

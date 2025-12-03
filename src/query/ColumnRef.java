@@ -25,7 +25,10 @@ public class ColumnRef {
 	public ColumnRef(String aliasName, String columnName) {
 		this.aliasName = aliasName.toLowerCase();
 		this.columnName = columnName.toLowerCase();
+
 	}
+
+
 	@Override
 	public boolean equals(Object other) {
 		if (other instanceof ColumnRef) {
@@ -36,14 +39,17 @@ public class ColumnRef {
 			return false;
 		}
 	}
+	
 	@Override
 	public int hashCode() {
 		return columnName.hashCode() + aliasName.hashCode();
 	}
+
 	@Override
 	public String toString() {
 		return aliasName + "." + columnName;
 	}
+	
 	/**
 	 * String representation with customized separator
 	 * between alias name and column name.

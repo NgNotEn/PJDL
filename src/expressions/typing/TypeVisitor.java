@@ -9,7 +9,7 @@ import buffer.BufferManager;
 import catalog.CatalogManager;
 import catalog.info.ColumnInfo;
 import config.NamingConfig;
-import expressions.SkinnerVisitor;
+import expressions.Visitor;
 import net.sf.jsqlparser.expression.AllComparisonExpression;
 import net.sf.jsqlparser.expression.AnalyticExpression;
 import net.sf.jsqlparser.expression.AnyComparisonExpression;
@@ -89,7 +89,7 @@ import types.TypeUtil;
  * @author immanueltrummer
  *
  */
-public class TypeVisitor extends SkinnerVisitor {
+public class TypeVisitor extends Visitor {
 	/**
 	 * Contains required information for mapping columns to types.
 	 */

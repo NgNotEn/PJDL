@@ -29,7 +29,7 @@ import data.StringData;
 import dk.brics.automaton.RegExp;
 import dk.brics.automaton.RunAutomaton;
 import expressions.ExpressionInfo;
-import expressions.SkinnerVisitor;
+import expressions.Visitor;
 import net.sf.jsqlparser.expression.AllComparisonExpression;
 import net.sf.jsqlparser.expression.AnalyticExpression;
 import net.sf.jsqlparser.expression.AnyComparisonExpression;
@@ -119,7 +119,7 @@ import org.objectweb.asm.util.TraceMethodVisitor;
  * @author immanueltrummer
  *
  */
-public class ExpressionCompiler extends SkinnerVisitor {
+public class ExpressionCompiler extends Visitor {
 	/**
 	 * Used for generating a unique class name for newly compiled
 	 * expressions. Is incremented by one after each compilation.
@@ -813,28 +813,6 @@ public class ExpressionCompiler extends SkinnerVisitor {
 				"expressions.compilation." + className,
 				classWriter.toByteArray());
 		return (UnaryIntEval)expressionClass.newInstance();
-	}
-
-	/**
-	 * Instantiates a new class for evaluating unary
-	 * integer expressions.
-	 *
-	 * @return	newly generated evaluator object
-	 * @throws Exception
-	 */
-	public UnaryIntEval[] getUnaryIntEvals(int size) throws Exception {
-		// Finalize code for unary evaluator of integer result
-		finalizeUnaryEval();
-		// Create instance of freshly generated class
-		DynamicClassLoader loader = new DynamicClassLoader();
-		Class<?> expressionClass = loader.defineClass(
-				"expressions.compilation." + className,
-				classWriter.toByteArray());
-		UnaryIntEval[] unaryIntEvals = new UnaryIntEval[size];
-		for (int i = 0; i < unaryIntEvals.length; i++) {
-			unaryIntEvals[i] = (UnaryIntEval)expressionClass.newInstance();
-		}
-		return unaryIntEvals;
 	}
 	/**
 	 * Instantiates a new class for evaluating unary

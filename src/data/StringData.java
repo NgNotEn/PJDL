@@ -2,16 +2,12 @@ package data;
 
 import java.io.FileOutputStream;
 import java.io.ObjectOutputStream;
-import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.BitSet;
-import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 
-import indexing.Index;
-import joining.result.ResultTuple;
+//import joining.result.ResultTuple;
 
 /**
  * Represents content of string column.
@@ -19,34 +15,30 @@ import joining.result.ResultTuple;
  * @author immanueltrummer
  *
  */
-public class StringData extends ColumnData implements Serializable {
+public class StringData extends ColumnData {
 	/**
 	 * Holds actual string data.
 	 */
 	public final String[] data;
+
 	/**
 	 * Initializes data array for given cardinality.
 	 * 
-	 * @param cardinality	number of rows
+	 * @param cardinality number of rows
 	 */
 	public StringData(int cardinality) {
 		super(cardinality);
 		this.data = new String[cardinality];
 	}
-	
+
 	@Override
 	public int compareRows(int row1, int row2) {
 		if (isNull.get(row1) || isNull.get(row2)) {
 			return 2;
 		} else {
 			int cmp = data[row1].compareTo(data[row2]);
-			return cmp>0?1:(cmp<0?-1:0);
+			return cmp > 0 ? 1 : (cmp < 0 ? -1 : 0);
 		}
-	}
-
-	@Override
-	public long longForRow(int row) {
-		return 0;
 	}
 
 	@Override
@@ -80,7 +72,7 @@ public class StringData extends ColumnData implements Serializable {
 		int copiedRowCtr = 0;
 		for (int row : rowsToCopy) {
 			// Treat special case: inserted null values
-			if (row==-1) {
+			if (row == -1) {
 				copyColumn.data[copiedRowCtr] = "NULL";
 				copyColumn.isNull.set(copiedRowCtr);
 			} else {
@@ -93,26 +85,11 @@ public class StringData extends ColumnData implements Serializable {
 	}
 
 	@Override
-	public ColumnData copyRangeRows(int first, int last, Index index) {
-		int cardinality = last - first;
-		StringData copyColumn = new StringData(cardinality);
-		int copiedRowCtr = 0;
-		for (int rid = first; rid < last; rid++) {
-			int row = index.sortedRow[rid];
-			// Treat special case: insertion of null values
-			copyColumn.data[copiedRowCtr] = data[row];
-			copyColumn.isNull.set(copiedRowCtr, isNull.get(row));
-			++copiedRowCtr;
-		}
-		return copyColumn;
-	}
-
-	@Override
-	public ColumnData copyRows(Collection<ResultTuple> tuples, int tableIdx) {
+	public ColumnData copyRows(List<int[]> tuples, int tableIdx) {
 		StringData copyColumn = new StringData(tuples.size());
 		int copiedRowCtr = 0;
-		for (ResultTuple compositeTuple : tuples) {
-			int baseTuple = compositeTuple.baseIndices[tableIdx];
+		for (int[] compositeTuple : tuples) {
+			int baseTuple = compositeTuple[tableIdx];
 			copyColumn.data[copiedRowCtr] = data[baseTuple];
 			copyColumn.isNull.set(copiedRowCtr, isNull.get(baseTuple));
 			++copiedRowCtr;
@@ -124,12 +101,16 @@ public class StringData extends ColumnData implements Serializable {
 	public ColumnData copyRows(BitSet rowsToCopy) {
 		StringData copyColumn = new StringData(rowsToCopy.cardinality());
 		int copiedRowCtr = 0;
-		for (int row=rowsToCopy.nextSetBit(0); row!=-1; 
-				row=rowsToCopy.nextSetBit(row+1)) {
+		for (int row = rowsToCopy.nextSetBit(0); row != -1; row = rowsToCopy.nextSetBit(row + 1)) {
 			copyColumn.data[copiedRowCtr] = data[row];
 			copyColumn.isNull.set(copiedRowCtr, isNull.get(row));
 			++copiedRowCtr;
 		}
 		return copyColumn;
+	}
+
+	@Override
+	public void updateMinMax() {
+		return;
 	}
 }

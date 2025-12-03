@@ -1,42 +1,18 @@
 package util;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveTask;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class CartesianProduct {
 
-    public static <T> List<List<T>> constructCombinations(
-            Collection<? extends Collection<T>> collections) {
-        return constructCombinations(
-                new ArrayList<Collection<T>>(collections),
-                Collections.emptyList()).collect(Collectors.toList());
-    }
+    // 使用更合适的线程池配置
+    private static final ForkJoinPool FORK_JOIN_POOL = new ForkJoinPool(
+            Math.min(Runtime.getRuntime().availableProcessors(), 8));
 
-    private static <T> Stream<List<T>> constructCombinations(
-            List<? extends Collection<T>> collections, List<T> current) {
-        return collections.isEmpty() ? Stream.of(current) :
-                collections.get(0).stream().flatMap(e -> {
-                    List<T> list = new ArrayList<T>(current);
-                    list.add(e);
-                    return constructCombinations(
-                            collections.subList(1, collections.size()), list);
-                });
-    }
-
-
-
-    // 移除静态 ForkJoinPool 以避免多线程竞争和死锁
-    // private static final ForkJoinPool FORK_JOIN_POOL = new ForkJoinPool(
-    //         Math.min(Runtime.getRuntime().availableProcessors(), 8));
-
-    // 调整并行阈值 - 禁用并行计算以避免死锁
-    private static final int PARALLEL_THRESHOLD = Integer.MAX_VALUE;  // 永远不使用并行
+    // 调整并行阈值
+    private static final int PARALLEL_THRESHOLD = 7000;
     private static final int CARTESIAN_THRESHOLD = 1000;
 
     // 添加状态跟踪字段
@@ -129,18 +105,17 @@ public class CartesianProduct {
         int currentBatchSize = (int) Math.min(batchSize, remaining);
 
         int[][] result;
-        // 始终使用顺序计算，避免多线程环境下的死锁
-        // if (currentBatchSize > PARALLEL_THRESHOLD) {
-        //     // 并行计算
-        //     result = FORK_JOIN_POOL.invoke(new CartesianProductTask(
-        //             nonEmptyGroups, groupSizes, totalLength,
-        //             currentIndex, currentIndex + currentBatchSize));
-        // } else {
+        if (currentBatchSize > PARALLEL_THRESHOLD) {
+            // 并行计算
+            result = FORK_JOIN_POOL.invoke(new CartesianProductTask(
+                    nonEmptyGroups, groupSizes, totalLength,
+                    currentIndex, currentIndex + currentBatchSize));
+        } else {
             // 顺序计算
             result = computeCartesianSequentially(
                     nonEmptyGroups, groupSizes, totalLength,
                     currentIndex, currentBatchSize);
-        // }
+        }
 
         // 更新状态
         currentIndex += currentBatchSize;

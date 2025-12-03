@@ -1,7 +1,8 @@
 package joining.result;
 
-import java.util.ArrayList;
-import java.util.List;
+import joining.Trie;
+
+import java.util.*;
 
 public class ResultLeapFrogTrieJoin {
 
@@ -71,6 +72,7 @@ public class ResultLeapFrogTrieJoin {
         // 清空之前的结果
         joinResults.clear();
         resultPoolIndex = 0;
+
         // 重置所有 Trie - 展开循环减少数组边界检查
         ResultTrie[] tries = allTries;
         int triesLen = allTriesLength;
@@ -79,9 +81,10 @@ public class ResultLeapFrogTrieJoin {
 
         curVariableID = 0;
         backtracked = false;
+
         // 主循环
         while (curVariableID >= 0) {
-            // 如果已经处理完所有变量,收集结果并回溯
+            // 如果已经处理完所有变量，收集结果并回溯
             if (curVariableID >= nrVars) {  // 处理到 nrVars-1
                 collectResult();
                 curVariableID--; // 内联 backtrack()
@@ -102,11 +105,15 @@ public class ResultLeapFrogTrieJoin {
             // 执行 LeapFrog Join
             leapfrogJoin(joinFrame);
         }
+
         return joinResults; // 每棵树的连接结果下标  { [], [], [] , ...}
     }
 
     private void collectResult() {
-        // 仍然只收集索引，让 genResultTuple 处理展开
+
+        // System.out.println(Arrays.toString(printResult));
+
+        // 复制结果到临时缓冲区
         ResultTrie[] tries = allTries;
 
         int[] result;
@@ -119,6 +126,7 @@ public class ResultLeapFrogTrieJoin {
 
         for (int i = 0; i < allTriesLength; i++) {
             int idx = tries[i].getLastLevelIndex();
+            // otries[i].validIdx.add(idx);  // 标记有效
             result[i] = idx;
         }
 

@@ -5,7 +5,7 @@ import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.SelectVisitor;
 
 /**
- * Some generic utility methods 
+ * Some generic utility methods
  * for the Skinner visitor.
  * 
  * @author immanueltrummer
@@ -19,12 +19,12 @@ public class VisitorUtil {
 	 * exception (or execute peacefully). This is needed since the original
 	 * expression visitor interface does not consider exceptions.
 	 * 
-	 * @param expression	expression to visit
-	 * @param visitor		visit expression via this visitor
+	 * @param expression expression to visit
+	 * @param visitor    visit expression via this visitor
 	 * @throws Exception
 	 */
-	public static void tryVisit(Expression expression, 
-			SkinnerVisitor visitor) throws Exception {
+	public static void tryVisit(Expression expression,
+			Visitor visitor) throws Exception {
 		try {
 			expression.accept(visitor);
 		} catch (Exception e) {
@@ -42,6 +42,7 @@ public class VisitorUtil {
 			throw visitor.sqlExceptions.get(0);
 		}
 	}
+
 	/**
 	 * Visits the given query using the given visitor within a try-catch
 	 * block. Check whether visitor stored the root cause of the exception and
@@ -49,14 +50,14 @@ public class VisitorUtil {
 	 * exception (or execute peacefully). This is needed since the original
 	 * expression visitor interface does not consider exceptions.
 	 * 
-	 * @param plainSelect	query to visit
-	 * @param visitor		visit query via this visitor
+	 * @param plainSelect query to visit
+	 * @param visitor     visit query via this visitor
 	 * @throws Exception
 	 */
-	public static void tryVisit(PlainSelect plainSelect, 
-			SkinnerVisitor visitor) throws Exception {
+	public static void tryVisit(PlainSelect plainSelect,
+			Visitor visitor) throws Exception {
 		try {
-			SelectVisitor selectVisitor = (SelectVisitor)visitor;
+			SelectVisitor selectVisitor = (SelectVisitor) visitor;
 			plainSelect.accept(selectVisitor);
 		} catch (Exception e) {
 			// Was exception caused by another exception that

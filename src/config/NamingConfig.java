@@ -90,9 +90,9 @@ public class NamingConfig {
 	/**
 	 * Name of the table containing final query result.
 	 */
-	public static final String FINAL_RESULT_NAME = "result.";
+	public static final String FINAL_RESULT_NAME = "tmp";
 	/**
-	 * Name of the table containing test query result.
+	 * Name of the table containing unique join key.
 	 */
-	public static final String TEST_RESULT_NAME = "test.";
+	public static final String DISTINCT_PRE = "distinct.";
 }

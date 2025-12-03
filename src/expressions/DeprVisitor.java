@@ -72,7 +72,7 @@ import query.SQLexception;
  * @author immanueltrummer
  *
  */
-public interface SkinnerDeprVisitor {
+public interface DeprVisitor {
 
     void visit(NullValue nullValue) throws SQLexception;
 

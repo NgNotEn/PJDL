@@ -1,6 +1,10 @@
 package buffer;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import catalog.CatalogManager;
@@ -34,29 +38,13 @@ public class BufferManager {
 	/**
 	 * Maps table and column names to corresponding data.
 	 * Using a thread-safe data structure allows inserting
-	 * columns by joining.parallel processing threads.
+	 * columns by parallel processing threads.
 	 */
-	public final static Map<ColumnRef, ColumnData> colToData =
-			new ConcurrentHashMap<ColumnRef, ColumnData>();
+	public final static Map<ColumnRef, ColumnData> colToData = new ConcurrentHashMap<ColumnRef, ColumnData>();
 	/**
 	 * Maps column references to associated indices.
 	 */
-	public final static Map<ColumnRef, Index> colToIndex =
-			new ConcurrentHashMap<ColumnRef, Index>();
-	/**
-	 * Filtering cache used in pre-processing.
-	 */
-	public final static Map<Integer, List<Integer>> indexCache =
-			new ConcurrentHashMap<>();
-	/**
-	 * Maps predicate string to associated id.
-	 */
-	public final static Map<String, Integer> predicateToID =
-			new HashMap<>();
-	/**
-	 * Previous query name.
-	 */
-	public static String prevQuery;
+	public final static Map<ColumnRef, Index> colToIndex = new ConcurrentHashMap<ColumnRef, Index>();
 
 	/**
 	 * Loads dictionary from hard disk.
@@ -68,13 +56,13 @@ public class BufferManager {
 			long startMillis = System.currentTimeMillis();
 			String dictionaryPath = PathUtil.dictionaryPath;
 			Object object = DiskUtil.loadObject(dictionaryPath);
-			dictionary = (Dictionary)object;
+			dictionary = (Dictionary) object;
 			long totalMillis = System.currentTimeMillis() - startMillis;
-			System.out.println("Loaded dictionary in " + totalMillis + " ms.");	
+			System.out.println("Loaded dictionary in " + totalMillis + " ms.");
 			// Generate debugging output
 			log("*** String dictionary sample ***");
 			int sampleSize = Math.min(10, dictionary.strings.length);
-			for (int i=0; i<sampleSize; ++i) {
+			for (int i = 0; i < sampleSize; ++i) {
 				log(i + "\t" + dictionary.getString(i));
 			}
 			log("******");
@@ -82,6 +70,7 @@ public class BufferManager {
 			System.out.println("No data dictionary found.");
 		}
 	}
+
 	/**
 	 * Loads data for current database into main memory.
 	 * 
@@ -92,7 +81,7 @@ public class BufferManager {
 		colToData.clear();
 		// Load dictionary from disk
 		loadDictionary();
-		// Collect columns to load in joining.parallel
+		// Collect columns to load in parallel
 		List<ColumnRef> colsToLoad = new ArrayList<ColumnRef>();
 		for (TableInfo table : CatalogManager.currentDB.nameToTable.values()) {
 			String tableName = table.name;
@@ -105,7 +94,7 @@ public class BufferManager {
 		colsToLoad.stream().parallel().forEach((colRef) -> {
 			try {
 				System.out.println("Loading column " + colRef.toString());
-				loadColumn(colRef);				
+				loadColumn(colRef);
 			} catch (Exception e) {
 				System.err.println("Error loading column " + colRef.toString());
 				e.printStackTrace();
@@ -113,10 +102,11 @@ public class BufferManager {
 		});
 		System.out.println("Loaded database.");
 	}
+
 	/**
 	 * Loads data for specified column from hard disk.
 	 * 
-	 * @param columnRef	reference to column to load
+	 * @param columnRef reference to column to load
 	 * 
 	 * @throws Exception
 	 */
@@ -129,51 +119,42 @@ public class BufferManager {
 			log("Loaded column meta-data: " + column.toString());
 			// Read generic object from file
 			String dataPath = PathUtil.colToPath.get(column);
-			Object object = DiskUtil.loadObject(dataPath);	
+			Object object = DiskUtil.loadObject(dataPath);
 			// Cast object according to column type
 			JavaType javaType = TypeUtil.toJavaType(column.type);
 			log("Column data type:\t" + javaType);
 			switch (javaType) {
-			case INT:
-				colToData.put(columnRef, (IntData)object);
-				break;
-			case LONG:
-				colToData.put(columnRef, (LongData)object);
-				break;
-			case DOUBLE:
-				colToData.put(columnRef, (DoubleData)object);
-				break;
-			case STRING:
-				colToData.put(columnRef, (StringData)object);
-				break;
+				case INT:
+					colToData.put(columnRef, (IntData) object);
+					break;
+				case LONG:
+					colToData.put(columnRef, (LongData) object);
+					break;
+				case DOUBLE:
+					colToData.put(columnRef, (DoubleData) object);
+					break;
+				case STRING:
+					colToData.put(columnRef, (StringData) object);
+					break;
 			}
 			// Generate statistics for output
 			if (LoggingConfig.BUFFER_VERBOSE) {
 				long totalMillis = System.currentTimeMillis() - startMillis;
-				System.out.println("Loaded " + columnRef.toString() + 
+				System.out.println("Loaded " + columnRef.toString() +
 						" in " + totalMillis + " milliseconds");
 			}
 			// Generate debugging output
 			log("*** Column " + columnRef.toString() + " sample ***");
-			int cardinality = colToData.get(columnRef).getCardinality();
-			int sampleSize = Math.min(10, cardinality);
-			for (int i=0; i<sampleSize; ++i) {
-				switch (column.type) {
-				case STRING_CODE:
-					int code = ((IntData)object).data[i];
-					log(dictionary.getString(code));
-					break;
-				}
-			}
-			log("******");
+
 		}
 	}
+
 	/**
 	 * Returns data of specified column, loads data from disk if
 	 * currently not loaded.
 	 * 
-	 * @param columnRef	request data for this column
-	 * @return			data of requested column
+	 * @param columnRef request data for this column
+	 * @return data of requested column
 	 * @throws Exception
 	 */
 	public static ColumnData getData(ColumnRef columnRef) throws Exception {
@@ -183,10 +164,11 @@ public class BufferManager {
 		}
 		return colToData.get(columnRef);
 	}
+
 	/**
 	 * Remove given column from buffer space.
 	 * 
-	 * @param columnRef	reference to column to remove
+	 * @param columnRef reference to column to remove
 	 * @throws Exception
 	 */
 	public static void unloadColumn(ColumnRef columnRef) throws Exception {
@@ -196,18 +178,19 @@ public class BufferManager {
 		colToData.remove(columnRef);
 		colToIndex.remove(columnRef);
 	}
+
 	/**
 	 * Unload all columns of temporary tables (typically after
 	 * query processing is finished).
 	 * 
-	 * @param except	names of tables to keep in each case
+	 * @param except names of tables to keep in each case
 	 * @throws Exception
 	 */
 	public static void unloadTempData(Set<String> except) throws Exception {
 		for (TableInfo table : CatalogManager.currentDB.nameToTable.values()) {
 			if (table.tempTable && !except.contains(table.name)) {
 				String tableName = table.name;
-				for (ColumnInfo colInfo : table.nameToCol.values()) {					
+				for (ColumnInfo colInfo : table.nameToCol.values()) {
 					ColumnRef colRef = new ColumnRef(
 							tableName, colInfo.name);
 					unloadColumn(colRef);
@@ -215,25 +198,9 @@ public class BufferManager {
 			}
 		}
 	}
+
 	/**
-	 * Unload all cache rows of temporary tables (typically after
-	 * a group of query processing is finished).
-	 *
-	 * @param queryName		the name of query group.
-	 */
-	public static void unloadCache(String queryName) {
-		if (prevQuery == null) {
-			prevQuery = queryName;
-		}
-		else if (!queryName.equals(prevQuery)) {
-			prevQuery = queryName;
-			indexCache.clear();
-			predicateToID.clear();
-			System.out.println("Clear the cache!");
-		}
-	}
-	/**
-	/**
+	 * /**
 	 * Unload all columns of temporary tables (typically after
 	 * query processing is finished).
 	 * 
@@ -242,10 +209,11 @@ public class BufferManager {
 	public static void unloadTempData() throws Exception {
 		unloadTempData(new HashSet<String>());
 	}
+
 	/**
 	 * Log given text if buffer logging activated.
 	 * 
-	 * @param text	text to output
+	 * @param text text to output
 	 */
 	static void log(String text) {
 		if (LoggingConfig.BUFFER_VERBOSE) {

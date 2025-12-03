@@ -114,6 +114,7 @@ public class JoinListGenerator {
             }
         }
 
+        // printDebugInfo();
 
         varCount++;
     }
@@ -160,10 +161,9 @@ public class JoinListGenerator {
         //     List<int[]> joinListInGroup = processGroup(group);// 处理分组, 组内连接
         //     joinListInGroups.add(joinListInGroup);
         // }
-
         joinListInGroups = aliasGrouping.parallelStream()
-        .map(this::processGroup)
-        .collect(Collectors.toList());
+                                .map(this::processGroup)
+                                .collect(Collectors.toList());
 
         curCPGenerator = new CartesianProduct(joinListInGroups);// 生成当前的变量的笛卡尔积
     }
