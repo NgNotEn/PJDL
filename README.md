@@ -1,5 +1,5 @@
 # A parallel join system with dynamic load work.
-The system is built based on the ADOPT.The main branch is a common version with a web interface, and you can checkout imdb branch to do benchmark of imdb.
+The system is built based on the ADOPT. The main branch is a common version with a web interface, and you can checkout imdb branch to do benchmark of imdb.
 
 
 ## How to build
