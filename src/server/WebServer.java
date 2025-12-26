@@ -146,8 +146,7 @@ public class WebServer {
     
     public static void main(String[] args) {
         try {
-            String SkinnerDbDir = "C:\\Users\\n" + //
-                                "gnoten\\Desktop\\avp-tpch\\ego-facebook";
+            String SkinnerDbDir = "db_path";
             PathUtil.initSchemaPaths(SkinnerDbDir);
             CatalogManager.loadDB(PathUtil.schemaPath);
             PathUtil.initDataPaths(CatalogManager.currentDB);
