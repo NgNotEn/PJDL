@@ -1,8 +1,17 @@
 # A parallel join system with dynamic load work.
 The system is built based on the ADOPT. The main branch is a common version with a web interface, and you can checkout imdb branch to do benchmark of imdb.
 
-## Core algorithm and system description.
-The core algorithm and system detail description of PJDL in here: (description)["./Algorithm & System Description.dm"]
+## Core Algorithm & System Description
+
+PJDL implements a parallel Leapfrog Triejoin with incremental result construction. 
+Due to page limits in the demo paper, we provide the complete pseudo-code and implementation details in a separate document.
+
+👉 **[Click here to read the Detailed Algorithm & System Description](./Algorithm_and_System_Description.md)**
+
+This document includes:
+- **Core Algorithm Pseudo-code** (Parallel Framework & Incremental LFTJ)
+- **Dynamic Grouping Strategy** (Union-Find Logic)
+- **Load Balancing Implementation** (Work-Stealing Details)
 
 ## How to build
 ```bash
