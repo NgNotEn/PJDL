@@ -21,6 +21,6 @@ The system initializes a **ResultTrie** structure for the $n$ partitions involve
 
 ![image-algorithm_1](./imgs/algorithm_1.png)
 
-![image-algorithm_1](./imgs/algorithm_1.png)
+![image-algorithm_1](./imgs/algorithm_2.png)
 
-![image-algorithm_1](./imgs/algorithm_1.png)
+![image-algorithm_1](./imgs/algorithm_3.png)
