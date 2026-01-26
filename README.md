@@ -6,7 +6,7 @@ The system is built based on the ADOPT. The main branch is a common version with
 PJDL implements a parallel Leapfrog Triejoin with incremental result construction. 
 Due to page limits in the demo paper, we provide the complete pseudo-code and implementation details in a separate document.
 
-👉 **[Click here to read the Detailed Algorithm & System Description](./Algorithm_and_System_Description.md)**
+👉 **[Click here to read the Detailed Algorithm & System Description](./Algorithm & System Description.md)**
 
 This document includes:
 - **Core Algorithm Pseudo-code** (Parallel Framework & Incremental LFTJ)
