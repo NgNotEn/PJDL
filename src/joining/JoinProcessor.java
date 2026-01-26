@@ -233,13 +233,17 @@ public class JoinProcessor implements Callable<List<int[]>>{
         while(true) {
             Trie[] tries =  manager.next_tries();
             if(tries == null) break;
+
+            logs.Logger.getInstance().logWorkerStart(threadId, "Processing combination.");
+
+
             LeapFrogTrieJoin lftj = new LeapFrogTrieJoin(tries);
             for (Set<ColumnRef> var : varOrder) {
                 lftj.executeJoin(var);
             }
             joinResults.addAll(handleNonEquiPredicates(lftj.genResultTuple()));
         }
-
+        logs.Logger.getInstance().logWorkerEnd(threadId, joinResults.size());
         return joinResults;
     }
 

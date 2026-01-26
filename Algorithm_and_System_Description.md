@@ -19,8 +19,8 @@ The system initializes a **ResultTrie** structure for the $n$ partitions involve
 
 **The pseudo-code is presented below:**
 
-![image-20260126121403635](/home/wjq/.config/Typora/typora-user-images/image-20260126121403635.png)
+![image-algorithm_1](./imgs/algorithm_1.png)
 
-![image-20260126121527064](/home/wjq/.config/Typora/typora-user-images/image-20260126121527064.png)
+![image-algorithm_1](./imgs/algorithm_1.png)
 
-![image-20260126121620373](/home/wjq/.config/Typora/typora-user-images/image-20260126121620373.png)
+![image-algorithm_1](./imgs/algorithm_1.png)

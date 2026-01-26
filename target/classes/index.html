@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PJDL System Dashboard</title>
+    <style>
+        :root { 
+            --bg-color: #f1f5f9;
+            --sidebar-width: 420px;
+            --primary: #2563eb;
+            --text-main: #334155;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+        }
+
+        * { box-sizing: border-box; }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            margin: 0; 
+            background: var(--bg-color); 
+            height: 100vh; 
+            display: flex; 
+            flex-direction: column;
+            color: var(--text-main);
+        }
+
+        /* --- Header --- */
+        header {
+            background: #1e293b;
+            color: white;
+            height: 60px;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            z-index: 10;
+        }
+        .brand { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 18px; }
+        .tag { background: #3b82f6; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+
+        /* --- Layout --- */
+        .container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            padding: 20px;
+            gap: 20px;
+        }
+
+        /* --- Left Column: Control & Logs --- */
+        .sidebar {
+            width: var(--sidebar-width);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            flex-shrink: 0;
+        }
+
+        /* --- Right Column: Metrics & Data --- */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow: hidden;
+        }
+
+        /* --- Common Card Style --- */
+        .card {
+            background: white;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: var(--card-shadow);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            color: #0f172a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8fafc;
+        }
+
+        /* --- Components --- */
+        
+        /* 1. SQL Editor */
+        .editor-container { flex-shrink: 0; }
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 16px;
+            border: none;
+            resize: none;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            outline: none;
+            color: #334155;
+            background: #fff;
+        }
+        textarea:focus { background: #f8fafc; }
+        .toolbar { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 10px; background: #fff; }
+        button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: white;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        button:hover { background: #f1f5f9; }
+        button.primary { background: var(--primary); color: white; border-color: var(--primary); }
+        button.primary:hover { background: #1d4ed8; }
+
+        /* 2. Log Console */
+        .log-container { flex: 1; min-height: 0; }
+        .log-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            font-family: 'Monaco', monospace;
+            font-size: 11px;
+            line-height: 1.7;
+            background: #ffffff;
+        }
+        .log-entry { padding: 2px 0; border-bottom: 1px dashed #f1f5f9; }
+        .log-time { color: #94a3b8; font-weight: bold; margin-right: 8px; }
+        .log-phase { color: #d97706; font-weight: bold; }
+        .log-info { color: #64748b; }
+        .log-worker { color: #059669; }
+
+        /* 3. Metrics Row */
+        .metrics-row {
+            display: flex;
+            gap: 20px;
+            flex-shrink: 0;
+        }
+        .metric-card {
+            flex: 1;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: var(--card-shadow);
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .metric-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+        .metric-value { font-size: 24px; font-weight: 700; color: #0f172a; }
+        .metric-sub { font-size: 12px; color: #10b981; display: flex; align-items: center; gap: 4px; }
+
+        /* 4. Data Table */
+        .data-container { flex: 1; min-height: 0; }
+        .table-wrap { flex: 1; overflow: auto; position: relative; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+        thead th {
+            position: sticky; top: 0;
+            background: #f8fafc;
+            color: var(--text-muted);
+            font-weight: 600;
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+            z-index: 5;
+        }
+        tbody td {
+            padding: 10px 20px;
+            border-bottom: 1px solid #f1f5f9;
+            color: var(--text-main);
+            white-space: nowrap;
+        }
+        tbody tr:nth-child(even) { background-color: #fcfcfc; }
+        tbody tr:hover { background-color: #eff6ff; }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="brand">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+        PJDL System Dashboard
+    </div>
+    <div class="tag">DASFAA 2026 Demo</div>
+</header>
+
+<div class="container">
+    
+    <div class="sidebar">
+        <div class="card editor-container">
+            <div class="card-header">Query Editor</div>
+            <textarea id="sqlInput">SELECT n.n_name, o.o_year, SUM(l.l_extendedprice * (1 - l.l_discount) - ps.ps_supplycost * l.l_quantity) as sum_profit FROM part p, supplier s, lineitem l, partsupp ps, orders o, nation n WHERE s.s_suppkey = l.l_suppkey AND ps.ps_suppkey = l.l_suppkey AND ps.ps_partkey = l.l_partkey AND p.p_partkey = l.l_partkey AND o.o_orderkey = l.l_orderkey AND s.s_nationkey = n.n_nationkey AND p.p_name like '%green%'</textarea>
+            <div class="toolbar">
+                <button class="primary" id="btnRun">Execute Query</button>
+                <button onclick="document.getElementById('sqlInput').value=''">Clear</button>
+            </div>
+        </div>
+
+        <div class="card log-container">
+            <div class="card-header">
+                System Logs
+                <span style="font-size:11px; color:#64748b" id="logCount">0 events</span>
+            </div>
+            <div class="log-body" id="logOutput">
+                </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        
+        <div class="metrics-row">
+            <div class="metric-card">
+                <div class="metric-label">Total Execution Time</div>
+                <div class="metric-value" id="valTime">0 ms</div>
+                <div class="metric-sub">
+                    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    Optimized
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Rows Returned</div>
+                <div class="metric-value" id="valRows">0</div>
+                <div class="metric-sub">Complete ResultSet</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">System Status</div>
+                <div class="metric-value" id="valStatus" style="color:#10b981; font-size:18px;">Ready</div>
+                <div class="metric-sub">Waiting for input</div>
+            </div>
+        </div>
+
+        <div class="card data-container">
+            <div class="card-header">
+                Query Results
+                <button style="padding:4px 8px; font-size:11px;">Export CSV</button>
+            </div>
+            <div class="table-wrap" id="tableOutput">
+                <div style="padding:40px; text-align:center; color:#94a3b8;">
+                    No results to display. Run a query to view data.
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    const API_URL = "http://localhost:8080/query";
+    
+    // --- Data ---
+    const INITIAL_DATA = {"headers":["nation","o_year","sum_profit"],"data":[["ALGERIA",1998,1.3428550215660024E8],["ALGERIA",1997,2.2822717828569907E8],["ALGERIA",1996,2.3061575301459956E8],["ALGERIA",1995,2.2095061111840025E8],["ALGERIA",1994,2.2669217178500086E8],["ALGERIA",1993,2.219172348729E8],["ALGERIA",1992,2.2779502543710092E8],["ARGENTINA",1998,1.3164217426869978E8],["ARGENTINA",1997,2.3359992237190023E8],["ARGENTINA",1996,2.3283279247899944E8],["ARGENTINA",1995,2.3446399998459974E8],["ARGENTINA",1994,2.3489713325249904E8],["ARGENTINA",1993,2.3262199346389985E8],["ARGENTINA",1992,2.3747368952900037E8],["BRAZIL",1998,1.3202604974219967E8],["BRAZIL",1997,2.290942665646999E8],["BRAZIL",1996,2.3004328601010162E8],["BRAZIL",1995,2.2880673021929997E8],["BRAZIL",1994,2.281071672538009E8],["BRAZIL",1993,2.3152233165839982E8],["BRAZIL",1992,2.2451590198909876E8],["CANADA",1998,1.3515353019090015E8],["CANADA",1997,2.3147266166950008E8],["CANADA",1996,2.332448785339003E8],["CANADA",1995,2.2744380350239998E8],["CANADA",1994,2.2881278798119894E8],["CANADA",1993,2.3538184314239922E8],["CANADA",1992,2.3097508077820033E8],["CHINA",1998,1.3129297762050025E8],["CHINA",1997,2.270566702867998E8],["CHINA",1996,2.283282956208005E8],["CHINA",1995,2.2364710651830038E8],["CHINA",1994,2.2951045676370105E8],["CHINA",1993,2.2525231920019892E8],["CHINA",1992,2.3014138527899924E8],["EGYPT",1998,1.3899526573659998E8],["EGYPT",1997,2.3540853913870075E8],["EGYPT",1996,2.3028088017940003E8],["EGYPT",1995,2.4066106599999884E8],["EGYPT",1994,2.3423530102489993E8],["EGYPT",1993,2.3473466268689954E8],["EGYPT",1992,2.308571906048005E8],["ETHIOPIA",1998,1.310935648958999E8],["ETHIOPIA",1997,2.2492976803239983E8],["ETHIOPIA",1996,2.232864200159011E8],["ETHIOPIA",1995,2.2430655332240075E8],["ETHIOPIA",1994,2.229154882646001E8],["ETHIOPIA",1993,2.209541782922002E8],["ETHIOPIA",1992,2.2712079440479854E8],["FRANCE",1998,1.3445073330180025E8],["FRANCE",1997,2.372688544263008E8],["FRANCE",1996,2.2846836892820072E8],["FRANCE",1995,2.327042057267011E8],["FRANCE",1994,2.3062627982200047E8],["FRANCE",1993,2.2949907194569993E8],["FRANCE",1992,2.301578190261998E8],["GERMANY",1998,1.3630393819200033E8],["GERMANY",1997,2.3235320094779992E8],["GERMANY",1996,2.29493034920099E8],["GERMANY",1995,2.3291870939200053E8],["GERMANY",1994,2.3062912835589904E8],["GERMANY",1993,2.3548927938339883E8],["GERMANY",1992,2.3370504016149992E8],["INDIA",1998,1.4165017138100052E8],["INDIA",1997,2.4317165681440026E8],["INDIA",1996,2.4385678084310013E8],["INDIA",1995,2.4492081822389972E8],["INDIA",1994,2.390701907425008E8],["INDIA",1993,2.4166160807559964E8],["INDIA",1992,2.397854092506999E8],["INDONESIA",1998,1.343786690852001E8],["INDONESIA",1997,2.3299990021699893E8],["INDONESIA",1996,2.370929667210986E8],["INDONESIA",1995,2.3350733088180083E8],["INDONESIA",1994,2.3245447286469978E8],["INDONESIA",1993,2.336534881394001E8],["INDONESIA",1992,2.340652898588003E8],["IRAN",1998,1.3465794061359996E8],["IRAN",1997,2.3181760936640003E8],["IRAN",1996,2.3788238993800023E8],["IRAN",1995,2.262419383690001E8],["IRAN",1994,2.2094696608180076E8],["IRAN",1993,2.2553561040700004E8],["IRAN",1992,2.2800188844879937E8],["IRAQ",1998,1.4093826190389952E8],["IRAQ",1997,2.4100396589610022E8],["IRAQ",1996,2.3988722704860038E8],["IRAQ",1995,2.4770060013580033E8],["IRAQ",1994,2.4101663183740076E8],["IRAQ",1993,2.395076173802997E8],["IRAQ",1992,2.3768318555720028E8],["JAPAN",1998,1.3164237114129971E8],["JAPAN",1997,2.2992943830309996E8],["JAPAN",1996,2.319823641550002E8],["JAPAN",1995,2.2657258328499845E8],["JAPAN",1994,2.2793437315949994E8],["JAPAN",1993,2.2939066902060056E8],["JAPAN",1992,2.3225678968000025E8],["JORDAN",1998,1.3002833035280001E8],["JORDAN",1997,2.257582796124999E8],["JORDAN",1996,2.2489146450700128E8],["JORDAN",1995,2.2071430017939934E8],["JORDAN",1994,2.237521469891998E8],["JORDAN",1993,2.2175866859709993E8],["JORDAN",1992,2.2558305464480054E8],["KENYA",1998,1.3517301398160025E8],["KENYA",1997,2.3187432849880058E8],["KENYA",1996,2.3400209519020018E8],["KENYA",1995,2.3603023504889998E8],["KENYA",1994,2.3076924181399998E8],["KENYA",1993,2.3517575709619963E8],["KENYA",1992,2.317019468161996E8],["MOROCCO",1998,1.3417599933929983E8],["MOROCCO",1997,2.300358080272005E8],["MOROCCO",1996,2.3243861221050075E8],["MOROCCO",1995,2.279567381427993E8],["MOROCCO",1994,2.2967486264850044E8],["MOROCCO",1993,2.2928934712169924E8],["MOROCCO",1992,2.349062955768999E8],["MOZAMBIQUE",1998,1.416449348845993E8],["MOZAMBIQUE",1997,2.3553131003519937E8],["MOZAMBIQUE",1996,2.3079308472340012E8],["MOZAMBIQUE",1995,2.3249017147060013E8],["MOZAMBIQUE",1994,2.331328491909E8],["MOZAMBIQUE",1993,2.3074107387139994E8],["MOZAMBIQUE",1992,2.3315825750419983E8],["PERU",1998,1.4270769897470003E8],["PERU",1997,2.3941907757769957E8],["PERU",1996,2.395847866455012E8],["PERU",1995,2.3767168071199936E8],["PERU",1994,2.3896134681019986E8],["PERU",1993,2.3886116292319915E8],["PERU",1992,2.307463530002989E8],["ROMANIA",1998,1.3539234979709977E8],["ROMANIA",1997,2.2150382047770008E8],["ROMANIA",1996,2.2394564342959896E8],["ROMANIA",1995,2.3013189103710058E8],["ROMANIA",1994,2.278873059283986E8],["ROMANIA",1993,2.30658285684801E8],["ROMANIA",1992,2.2239826547449917E8],["RUSSIA",1998,1.309294856994999E8],["RUSSIA",1997,2.33426768648599E8],["RUSSIA",1996,2.3168807587679955E8],["RUSSIA",1995,2.2713706646490058E8],["RUSSIA",1994,2.3372750628319994E8],["RUSSIA",1993,2.2962076923269963E8],["RUSSIA",1992,2.2635915133219847E8],["SAUDI ARABIA",1998,1.375387453275996E8],["SAUDI ARABIA",1997,2.3020430017190015E8],["SAUDI ARABIA",1996,2.306644628535001E8],["SAUDI ARABIA",1995,2.3247742921160015E8],["SAUDI ARABIA",1994,2.2984527815870094E8],["SAUDI ARABIA",1993,2.30120962920699E8],["SAUDI ARABIA",1992,2.2866431155990097E8],["UNITED KINGDOM",1998,1.3610341280879998E8],["UNITED KINGDOM",1997,2.345528760951998E8],["UNITED KINGDOM",1996,2.2988359771589968E8],["UNITED KINGDOM",1995,2.346308431495999E8],["UNITED KINGDOM",1994,2.439412801863991E8],["UNITED KINGDOM",1993,2.3389254706949988E8],["UNITED KINGDOM",1992,2.3264617535900015E8],["UNITED STATES",1998,1.384650507954005E8],["UNITED STATES",1997,2.3256105229759976E8],["UNITED STATES",1996,2.3009333577070054E8],["UNITED STATES",1995,2.3215938837589973E8],["UNITED STATES",1994,2.316898958977013E8],["UNITED STATES",1993,2.3446816547569993E8],["UNITED STATES",1992,2.322011444360998E8],["VIETNAM",1998,1.3566017578939992E8],["VIETNAM",1997,2.2742662437719968E8],["VIETNAM",1996,2.3474364619809973E8],["VIETNAM",1995,2.2677614123610008E8],["VIETNAM",1994,2.293577972928998E8],["VIETNAM",1993,2.31171320038199E8],["VIETNAM",1992,2.2933592145700097E8]],"logs":["[08:39:49.798] | PHASE | Data Partitioning","[08:39:49.800] | INFO | Split tables into 48 combinations.","[08:39:50.421] | WORKER_START | Task-20 | Processing combination.","[08:39:50.421] | WORKER_START | Task-27 | Processing combination.","[08:39:50.421] | WORKER_START | Task-2 | Processing combination.","[08:39:50.424] | WORKER_START | Task-1 | Processing combination.","[08:39:50.421] | WORKER_START | Task-9 | Processing combination.","[08:39:50.424] | WORKER_START | Task-26 | Processing combination.","[08:39:50.424] | WORKER_START | Task-31 | Processing combination.","[08:39:50.424] | WORKER_START | Task-25 | Processing combination.","[08:39:50.424] | WORKER_START | Task-10 | Processing combination.","[08:39:50.424] | WORKER_START | Task-6 | Processing combination.","[08:39:50.424] | WORKER_START | Task-11 | Processing combination.","[08:39:50.424] | WORKER_START | Task-14 | Processing combination.","[08:39:50.424] | WORKER_START | Task-23 | Processing combination.","[08:39:50.424] | WORKER_START | Task-7 | Processing combination.","[08:39:50.424] | WORKER_START | Task-12 | Processing combination.","[08:39:50.424] | WORKER_START | Task-16 | Processing combination.","[08:39:50.424] | WORKER_START | Task-3 | Processing combination.","[08:39:50.424] | WORKER_START | Task-22 | Processing combination.","[08:39:50.424] | WORKER_START | Task-19 | Processing combination.","[08:39:50.424] | WORKER_START | Task-17 | Processing combination.","[08:39:50.424] | WORKER_START | Task-13 | Processing combination.","[08:39:50.425] | WORKER_START | Task-28 | Processing combination.","[08:39:50.425] | WORKER_START | Task-18 | Processing combination.","[08:39:50.425] | WORKER_START | Task-0 | Processing combination.","[08:39:50.425] | WORKER_START | Task-24 | Processing combination.","[08:39:50.425] | WORKER_START | Task-8 | Processing combination.","[08:39:50.425] | WORKER_START | Task-15 | Processing combination.","[08:39:50.425] | WORKER_START | Task-5 | Processing combination.","[08:39:50.425] | WORKER_START | Task-30 | Processing combination.","[08:39:50.425] | WORKER_START | Task-4 | Processing combination.","[08:39:50.425] | WORKER_START | Task-29 | Processing combination.","[08:39:50.425] | WORKER_START | Task-21 | Processing combination.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.440] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.441] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.441] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:50.467] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.477] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.484] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.493] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.493] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.494] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.498] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.500] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.509] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.518] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.521] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.529] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.531] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.531] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.534] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.541] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.545] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.554] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.559] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.561] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.569] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.583] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.586] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.593] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.637] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.637] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.637] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.640] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.643] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.644] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.645] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.645] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:50.877] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:50.879] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:50.881] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:50.889] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:50.954] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:50.967] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:50.980] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:50.996] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.004] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.009] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.012] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.012] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.014] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.043] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.047] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.061] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.083] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.085] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.089] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.090] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.091] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.093] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.094] | WORKER_START | Task-12 | Processing combination.","[08:39:51.095] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.095] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.131] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.135] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.150] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.151] | WORKER_START | Task-31 | Processing combination.","[08:39:51.151] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.151] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.157] | WORKER_START | Task-26 | Processing combination.","[08:39:51.157] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.157] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.186] | WORKER_START | Task-4 | Processing combination.","[08:39:51.186] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.186] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.193] | WORKER_START | Task-21 | Processing combination.","[08:39:51.194] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.194] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.212] | WORKER_START | Task-25 | Processing combination.","[08:39:51.213] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.214] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.223] | WORKER_START | Task-1 | Processing combination.","[08:39:51.223] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.224] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.228] | WORKER_START | Task-23 | Processing combination.","[08:39:51.228] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.228] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.233] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.250] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.268] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.268] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.283] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.297] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.300] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.303] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.316] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.325] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.330] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.332] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.342] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.354] | WORKER_START | Task-12 | Processing combination.","[08:39:51.355] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.355] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.361] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.363] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.367] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.367] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.369] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.369] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.369] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.369] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.383] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.391] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.393] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.396] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.418] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.443] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.450] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.464] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.602] | WORKER_START | Task-11 | Processing combination.","[08:39:51.602] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.602] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.603] | WORKER_START | Task-21 | Processing combination.","[08:39:51.603] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.604] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.614] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.615] | WORKER_START | Task-23 | Processing combination.","[08:39:51.615] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.616] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.617] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.624] | WORKER_START | Task-22 | Processing combination.","[08:39:51.624] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.625] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.636] | WORKER_START | Task-24 | Processing combination.","[08:39:51.636] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.636] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.637] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.637] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.643] | WORKER_END | Task-10 | Result: 0","[08:39:51.646] | WORKER_START | Task-17 | Processing combination.","[08:39:51.646] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.647] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.653] | WORKER_START | Task-15 | Processing combination.","[08:39:51.653] | GROUP | Var [Var_1]: Partitioned into 1 disjoint groups.","[08:39:51.653] | GROUP | Var [Var_2]: Partitioned into 2 disjoint groups.","[08:39:51.658] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.661] | WORKER_END | Task-25 | Result: 0","[08:39:51.682] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.686] | WORKER_END | Task-16 | Result: 0","[08:39:51.693] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.696] | WORKER_END | Task-30 | Result: 0","[08:39:51.716] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.716] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.721] | WORKER_END | Task-5 | Result: 0","[08:39:51.726] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.737] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.742] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.743] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.748] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.751] | WORKER_END | Task-23 | Result: 22","[08:39:51.767] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.767] | GROUP | Var [Var_3]: Partitioned into 2 disjoint groups.","[08:39:51.780] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.783] | WORKER_END | Task-11 | Result: 0","[08:39:51.783] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:51.786] | WORKER_END | Task-22 | Result: 22","[08:39:52.220] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.235] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.240] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.242] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.298] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.587] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.609] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.617] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.647] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.648] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.654] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.659] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.715] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.718] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.719] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.728] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.760] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.761] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.791] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.797] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.801] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:52.814] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:53.358] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:53.399] | GROUP | Var [Var_4]: Partitioned into 2 disjoint groups.","[08:39:55.946] | WORKER_END | Task-9 | Result: 68297","[08:39:56.119] | WORKER_END | Task-28 | Result: 68070","[08:39:56.270] | WORKER_END | Task-7 | Result: 67417","[08:39:56.380] | WORKER_END | Task-20 | Result: 67919","[08:39:56.404] | WORKER_END | Task-6 | Result: 68123","[08:39:56.511] | WORKER_END | Task-4 | Result: 67899","[08:39:56.518] | WORKER_END | Task-12 | Result: 67837","[08:39:56.539] | WORKER_END | Task-1 | Result: 68689","[08:39:56.563] | WORKER_END | Task-31 | Result: 67908","[08:39:56.614] | WORKER_END | Task-18 | Result: 67711","[08:39:56.743] | WORKER_END | Task-8 | Result: 67759","[08:39:56.775] | WORKER_END | Task-29 | Result: 67508","[08:39:56.803] | WORKER_END | Task-14 | Result: 68136","[08:39:56.843] | WORKER_END | Task-27 | Result: 67921","[08:39:56.873] | WORKER_END | Task-19 | Result: 68077","[08:39:56.942] | WORKER_END | Task-21 | Result: 67820","[08:39:56.953] | WORKER_END | Task-26 | Result: 68205","[08:39:56.962] | WORKER_END | Task-24 | Result: 67677","[08:39:56.964] | WORKER_END | Task-15 | Result: 67716","[08:39:56.982] | WORKER_END | Task-17 | Result: 67727","[08:39:57.020] | WORKER_END | Task-13 | Result: 68157","[08:39:57.044] | WORKER_END | Task-2 | Result: 68429","[08:39:57.044] | WORKER_END | Task-3 | Result: 68072","[08:39:57.120] | WORKER_END | Task-0 | Result: 68043"]};
+
+    document.addEventListener('DOMContentLoaded', () => {
+        renderTable(INITIAL_DATA);
+        renderLogs(INITIAL_DATA.logs);
+        updateStatus("Ready", false);
+    });
+
+    // --- Core Logic ---
+
+    async function executeQuery() {
+        const sql = document.getElementById('sqlInput').value.trim();
+        if(!sql) return;
+        
+        updateStatus("Executing...", true);
+        const start = Date.now();
+
+        try {
+            const res = await fetch(`${API_URL}?sql=${encodeURIComponent(sql)}`);
+            const json = await res.json();
+            const duration = Date.now() - start;
+
+            if(json.error) {
+                // Show Error in logs
+                const errLog = `[${new Date().toLocaleTimeString()}] | ERROR | ${json.error}`;
+                const logs = document.getElementById('logOutput');
+                logs.innerHTML += `<div class="log-entry" style="color:red;">${errLog}</div>`;
+                logs.scrollTop = logs.scrollHeight;
+                updateStatus("Error", false);
+            } else {
+                renderTable(json);
+                renderLogs(json.logs);
+                updateStatus("Success", false);
+            }
+        } catch(e) {
+            alert("Network Error: " + e.message);
+            updateStatus("Error", false);
+        }
+    }
+
+    // --- UI Helpers ---
+
+    function renderTable(json) {
+        const box = document.getElementById('tableOutput');
+        
+        // Update Metrics
+        const rowCount = json.data ? json.data.length : 0;
+        document.getElementById('valRows').textContent = rowCount.toLocaleString();
+        
+        // Calculate total time from logs (End of last task - Start of first task)
+        // Simple heuristic: just look at the timestamps in logs if available, else random
+        let duration = 0;
+        if(json.logs && json.logs.length > 0) {
+            const first = parseTime(json.logs[0]);
+            const last = parseTime(json.logs[json.logs.length-1]);
+            if(first && last) duration = last - first;
+        }
+        if(duration > 0) document.getElementById('valTime').textContent = duration + " ms";
+
+        if(rowCount === 0) {
+            box.innerHTML = '<div style="padding:40px; text-align:center; color:#94a3b8;">No results found.</div>';
+            return;
+        }
+
+        let html = '<table><thead><tr>';
+        json.headers.forEach(h => html += `<th>${h}</th>`);
+        html += '</tr></thead><tbody>';
+        
+        // Limit rows for performance
+        json.data.slice(0, 1000).forEach(row => {
+            html += '<tr>';
+            row.forEach(cell => {
+                let val = cell;
+                if(typeof val === 'number') {
+                    // Format large numbers
+                    if(val > 1000) val = val.toLocaleString(undefined, {maximumFractionDigits: 2});
+                }
+                html += `<td>${val}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        box.innerHTML = html;
+    }
+
+    function renderLogs(logs) {
+        const box = document.getElementById('logOutput');
+        const countBadge = document.getElementById('logCount');
+        
+        if(!logs) { 
+            box.innerHTML = ''; 
+            countBadge.textContent = '0 events';
+            return; 
+        }
+        
+        countBadge.textContent = `${logs.length} events`;
+        let html = '';
+        
+        logs.forEach(line => {
+            // Highlighting
+            let cssClass = 'log-info';
+            if(line.includes("PHASE")) cssClass = 'log-phase';
+            else if(line.includes("WORKER")) cssClass = 'log-worker';
+            
+            // Simple parsing for colorization
+            // Expected: [TIME] | TYPE | ...
+            const parts = line.split('|');
+            if(parts.length >= 3) {
+                const time = parts[0].trim();
+                const type = parts[1].trim();
+                const msg = parts.slice(2).join('|').trim();
+                
+                html += `<div class="log-entry">
+                    <span class="log-time">${time}</span>
+                    <span class="${cssClass}">[${type}]</span>
+                    <span>${msg}</span>
+                </div>`;
+            } else {
+                html += `<div class="log-entry">${line}</div>`;
+            }
+        });
+        
+        box.innerHTML = html;
+        box.scrollTop = box.scrollHeight;
+    }
+
+    function updateStatus(msg, loading) {
+        const valStatus = document.getElementById('valStatus');
+        valStatus.textContent = msg;
+        valStatus.style.color = loading ? '#eab308' : (msg === 'Error' ? '#ef4444' : '#10b981');
+    }
+
+    // Helper to parse [HH:mm:ss.SSS] to ms for duration calc
+    function parseTime(logLine) {
+        try {
+            const match = logLine.match(/\[(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]/);
+            if(!match) return null;
+            const d = new Date();
+            d.setHours(parseInt(match[1]));
+            d.setMinutes(parseInt(match[2]));
+            d.setSeconds(parseInt(match[3]));
+            d.setMilliseconds(parseInt(match[4]));
+            return d.getTime();
+        } catch(e) { return null; }
+    }
+
+</script>
+
+</body>
+</html>

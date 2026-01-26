@@ -11,6 +11,7 @@ import query.QueryInfo;
 import util.Pair;
 
 public class TrieManager {
+    private static final int MIN_BLOCK_ROWS = 50_000; // avoid overly fine partitions on large tables
     public static int totalVarCount;
     public static int aliasCnt;
     public static HashMap<String, Integer> alias2ID;
@@ -69,27 +70,23 @@ public class TrieManager {
         // 只切割前三大表，根据数据规模选择合适的组合数
         int targetCombinations;
         int[] topThreeSplits; // [最大表, 第二大表, 第三大表]
-        
+
+        // 调低切分密度以适配 5GB TPCH，优先减少组合数以节省内存
         if (maxCard > 50_000_000) {
-            // 亿行级别: 512 = 32 × 8 × 2
-            targetCombinations = 512;
-            topThreeSplits = new int[]{32, 8, 2};
-        } else if (maxCard > 10_000_000) {
-            // 千万级别: 256 = 16 × 8 × 2
-            targetCombinations = 256;
-            topThreeSplits = new int[]{16, 8, 2};
-        } else if (maxCard > 1_000_000) {
-            // 百万级别: 128 = 8 × 8 × 2
-            targetCombinations = 128;
-            topThreeSplits = new int[]{8, 8, 2};
-        } else if (maxCard > 100_000) {
-            // 十万级别: 64 = 8 × 4 × 2
-            targetCombinations = 64;
+            targetCombinations = 128;   // 之前 512，过多会放大内存
             topThreeSplits = new int[]{8, 4, 2};
-        } else {
-            // 小表: 32 = 4 × 4 × 2
-            targetCombinations = 32;
+        } else if (maxCard > 10_000_000) {
+            targetCombinations = 96;    // 16×3×2，避免过度分片
+            topThreeSplits = new int[]{8, 3, 2};
+        } else if (maxCard > 1_000_000) {
+            targetCombinations = 64;    // 8×4×2
+            topThreeSplits = new int[]{8, 4, 2};
+        } else if (maxCard > 100_000) {
+            targetCombinations = 32;    // 4×4×2
             topThreeSplits = new int[]{4, 4, 2};
+        } else {
+            targetCombinations = 16;    // 小表尽量不切
+            topThreeSplits = new int[]{2, 2, 2};
         }
 
         // 初始化普通变量（串行版本）
@@ -121,6 +118,11 @@ public class TrieManager {
         }
         
         totalCombination = totalComb;
+
+        // ... 计算切割 ...
+        logs.Logger.getInstance().reset(); // 确保清空旧日志
+        logs.Logger.getInstance().logPhase("Data Partitioning");
+        logs.Logger.getInstance().info("Split tables into " + totalCombination + " combinations.");
     }
     
     /**
@@ -162,7 +164,7 @@ public class TrieManager {
                 int card = tries[idx].cardinality;
                 
                 // 应用最小块大小约束（每块至少10行）
-                int maxAllowed = Math.max(1, card / 10);
+                int maxAllowed = Math.max(1, card / MIN_BLOCK_ROWS);
                 splits[idx] = Math.min(topThreeSplits[rank], maxAllowed);
             }
         }

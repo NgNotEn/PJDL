@@ -21,6 +21,7 @@ public class Trie {
     public int curLevel = -1;  // 当前层, 根节点在-1层
     private int[] curValues;    // 当前列的原始数据（转换为int用于比较）
     public int[] tupleIdx;
+    private int tupleOffset;
     public IntArray curLevelValues; 
     public IntArray curLevelValueParentIdx; 
     public IntArray curLevelValueStatus;
@@ -60,7 +61,8 @@ public class Trie {
         valueBounds1.add(0);
         valueBounds1.add(cardinality);
 
-        tupleIdx = Arrays.copyOfRange(bt.tupleOrder, domain.getFirst(), domain.getSecond());
+        tupleIdx = bt.tupleOrder;          // 直接引用，避免分区内复制
+        tupleOffset = domain.getFirst();
     }
 
     int[] boundsOfArray(int arrayIdx) {
@@ -161,9 +163,10 @@ public class Trie {
 
         // 提取唯一值
         int currentStart = arrayLB;
-        int currentValue = values[indices[currentStart]];
+        int currentValue = values[indices[tupleOffset + currentStart]];
         for (int j = arrayLB + 1; j < arrayUB; j++) {
-            int value = values[indices[j]];
+            int idx = indices[tupleOffset + j];
+            int value = values[idx];
             if (value != currentValue) {
                 curLevelValues.add(currentValue);
                 curLevelValueParentIdx.add(fatherIdx);

@@ -309,3 +309,4 @@ public class LeapFrogJoin {
         currentPositions[listIndex] = left;
     }
 }
+

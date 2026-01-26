@@ -78,7 +78,14 @@ public class LeapFrogTrieJoin {
         varCount++;
 
         List<TreeSet<Integer>> aliasGrouping = new ArrayList<>();        // Groups
+
+        
         updateLevelAliasGrouping(aliasGrouping);
+
+        // 在 updateLevelAliasGrouping 方法内，或者你进行 Union-Find 分组的地方
+        logs.Logger.getInstance().logGroup("Var_" + varCount, "Partitioned into " + aliasGrouping.size() + " disjoint groups.");
+
+
         return aliasGrouping;
 
     }

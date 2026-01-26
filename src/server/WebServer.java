@@ -5,7 +5,6 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.concurrent.Executors;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -22,8 +21,9 @@ import diskio.PathUtil;
 import indexing.Indexer;
 import joining.BaseTrie;
 import joining.parallel.threads.ThreadPool;
-import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import java.util.HashMap;
 
 public class WebServer {
     private HttpServer server;
@@ -35,144 +35,110 @@ public class WebServer {
     
     public void start() {
         try {
+            // 创建服务
             server = HttpServer.create(new InetSocketAddress(port), 0);
-            server.createContext("/query", new SimpleQueryHandler());
+            
+            // 唯一的接口：查询
+            server.createContext("/query", new QueryHandler());
+            
             server.setExecutor(Executors.newCachedThreadPool());
             server.start();
             
-            System.out.println("WebServer started on port " + port);
-            System.out.println("GET endpoint: http://localhost:" + port + "/query?sql=YOUR_SQL_HERE");
+            System.out.println("PJDL Server running on port " + port);
             
         } catch (Exception e) {
-            System.err.println("Failed to start WebServer: " + e.getMessage());
+            System.err.println("Server start failed: " + e.getMessage());
         }
     }
     
     public void stop() {
-        if (server != null) {
-            server.stop(0);
-            System.out.println("WebServer stopped");
-        }
+        if (server != null) server.stop(0);
     }
     
-    private static class SimpleQueryHandler implements HttpHandler {
+    // 处理 SQL 查询
+    private static class QueryHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            // 设置CORS头
+            // CORS 头 (允许前端跨域访问)
             exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
             exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, OPTIONS");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
             
-            // 处理预检请求
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(200, -1);
-                exchange.getResponseBody().close();
                 return;
             }
             
-            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-                sendError(exchange, 405, "Only GET method is allowed");
-                return;
-            }
-            
-            String query = exchange.getRequestURI().getQuery();
-            if (query == null || !query.contains("sql=")) {
-                sendError(exchange, 400, "Missing sql parameter");
-                return;
-            }
-            
-            String sql = extractSql(query);
-            if (sql == null || sql.trim().isEmpty()) {
-                sendError(exchange, 400, "Empty SQL query");
-                return;
-            }
-            
-            String jsonResponse = processSqlQuery(sql);
+            String responseStr;
             try {
-                BufferManager.unloadTempData();
-                CatalogManager.removeTempTables();
+                String queryURI = exchange.getRequestURI().getQuery();
+                String sql = extractSqlParam(queryURI);
+                
+                if (sql == null || sql.trim().isEmpty()) {
+                    throw new IllegalArgumentException("SQL is empty");
+                }
+
+                System.out.println("Executing: " + sql);
+                
+                // 执行查询并获取结果
+                // 注意：确保你的 SkinnerCmd.processSQL 会把结果存入 SkinnerCmd.result
+                Statement stmt = CCJSqlParserUtil.parse(sql);
+                SkinnerCmd.processSQL(stmt.toString(), false); 
+                responseStr = SkinnerCmd.result; 
+
             } catch (Exception e) {
                 e.printStackTrace();
+                // 返回错误 JSON
+                responseStr = "{\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}";
             }
             
-            
-            sendResponse(exchange, 200, jsonResponse);
+            // 发送响应
+            byte[] bytes = responseStr.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(bytes);
+            }
         }
         
-        private String extractSql(String query) {
-            try {
-                String[] pairs = query.split("&");
-                for (String pair : pairs) {
-                    int idx = pair.indexOf("=");
-                    if (idx > 0 && "sql".equals(pair.substring(0, idx))) {
-                        return URLDecoder.decode(pair.substring(idx + 1), StandardCharsets.UTF_8.name());
-                    }
+        // 简单的参数提取工具
+        private String extractSqlParam(String query) {
+            if (query == null) return null;
+            for (String param : query.split("&")) {
+                String[] pair = param.split("=");
+                if (pair.length == 2 && "sql".equals(pair[0])) {
+                    try {
+                        return URLDecoder.decode(pair[1], StandardCharsets.UTF_8.name());
+                    } catch (Exception e) { return null; }
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
             }
             return null;
-        }
-
-        
-        private String processSqlQuery(String sql) {
-            // 这里替换为您的实际查询逻辑
-            // 示例实现 - 返回测试数据
-            try {
-
-                Statement query = CCJSqlParserUtil.parse(sql);
-                SkinnerCmd.processSQL(query.toString(), false);
-                return SkinnerCmd.result;
-            } catch (Exception e) {
-                return "{\"error\":\"Query execution failed: " + e.getMessage() + "\"}";
-            }
-        }
-        
-        private void sendResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
-            exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
-            byte[] responseBytes = response.getBytes(StandardCharsets.UTF_8);
-            exchange.sendResponseHeaders(statusCode, responseBytes.length);
-            
-            OutputStream os = exchange.getResponseBody();
-            os.write(responseBytes);
-            os.close();
-        }
-        
-        private void sendError(HttpExchange exchange, int statusCode, String message) throws IOException {
-            String errorResponse = "{\"error\":\"" + message + "\"}";
-            sendResponse(exchange, statusCode, errorResponse);
         }
     }
     
     public static void main(String[] args) {
+        // 初始化数据库 (保持你原有的逻辑)
         try {
-            String SkinnerDbDir = "db_path";
+            String SkinnerDbDir = "db_path"; // 修改为实际路径
             PathUtil.initSchemaPaths(SkinnerDbDir);
             CatalogManager.loadDB(PathUtil.schemaPath);
             PathUtil.initDataPaths(CatalogManager.currentDB);
-            System.out.println("Loading data ...");
+            
+            System.out.println("Loading data...");
             GeneralConfig.inMemory = true;
             BufferManager.loadDB();
             System.out.println("Data loaded.");
+            
             Indexer.indexAll(StartupConfig.INDEX_CRITERIA);
-		    BaseTrie.orderCache = new HashMap<>();
+            BaseTrie.orderCache = new HashMap<>();
             ThreadPool.initThreadsPool(ParallelConfig.EXE_THREADS, ParallelConfig.PRE_THREADS);
-		    SkinnerCmd.dbDir = SkinnerDbDir;
+            SkinnerCmd.dbDir = SkinnerDbDir;
         } catch (Exception e) {
-            System.err.println("Failed to initialize database: " + e.getMessage());
+            e.printStackTrace();
             return;
         }
-        
 
+        // 启动 Web 服务
         WebServer server = new WebServer(8080);
         server.start();
-        
-        Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
-        
-        try {
-            Thread.currentThread().join();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
 }

@@ -38,7 +38,7 @@ public class JoinConfig {
 	/**
 	 *
 	 */
-	public static int NTHREAD = 1;
+	public static int NTHREAD = 32;
 
 	public static int INITCUBE = 64;
 }
