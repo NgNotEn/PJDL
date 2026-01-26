@@ -1,6 +1,8 @@
 # A parallel join system with dynamic load work.
 The system is built based on the ADOPT. The main branch is a common version with a web interface, and you can checkout imdb branch to do benchmark of imdb.
 
+## Core algorithm and system description.
+The core algorithm and system detail description of PJDL in here: (description)["./Algorithm & System Description.dm"]
 
 ## How to build
 ```bash
